@@ -144,6 +144,12 @@ select, .btn, .segbtn, .chip {
   min-height: 34px; padding: 4px 11px; cursor: pointer;
 }
 select { padding-right: 6px; }
+input[type="text"] {
+  font-family: var(--f-mono); font-size: var(--s-0); color: var(--ink);
+  background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius);
+  padding: 6px 8px; min-width: 160px;
+}
+input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }
 .btn:hover, .segbtn:hover, .chip:hover, select:hover { border-color: var(--scene-edge); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); min-width: 84px; font-weight: 600; }
@@ -430,7 +436,10 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 
   <div class="toolbar" role="toolbar" aria-label="Lane lab controls">
     <div class="tgroup" aria-label="Playback">
-      <button type="button" id="btn-play" class="btn primary" aria-pressed="true" title="Pause or resume (Space)">Pause</button>
+      <label class="field"><span>Message</span>
+        <input type="text" id="msg-input" placeholder="Call me Ishmael" value="Call me Ishmael" maxlength="32" aria-label="Message to track through the pipeline">
+      </label>
+      <button type="button" id="btn-play" class="btn primary" aria-pressed="true" title="Pause or resume (P)">Pause</button>
       <button type="button" id="btn-step" class="btn" title="Advance one data unit (.)">Step</button>
       <label class="field"><span>Speed</span>
         <select id="sel-speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
@@ -918,6 +927,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     playing: true, speed: 1, u: 320,
     width: 4, preset: 'grouped',
     selected: -1, stage: null,
+    messageContent: 'Call me Ishmael',
     faults: { skewLane: 1, skewNs: 0, amLane: 3, amLoss: false, losLane: 0, los: false,
               noiseLane: -1, noise: 0, swap: false },
     rot: [0, 0, 0, 0, 0, 0, 0, 0],
@@ -929,6 +939,22 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   var listeners = [];
   P.on = function (fn) { listeners.push(fn); };
   P.emit = function (what) { listeners.forEach(function (fn) { fn(what); }); };
+
+  // Per-lane message slices: lane i gets bytes [i, i+8, i+16, ...]
+  P.messageLaneSlice = function (lane) {
+    var msg = S.messageContent || '';
+    var bytes = [];
+    for (var i = lane; i < msg.length; i += 8) bytes.push(msg.charCodeAt(i));
+    return bytes;
+  };
+
+  // Message as a repeating buffer of bytes, padded to frame size
+  P.messageBytes = function (count) {
+    var msg = (S.messageContent || '').split('');
+    var buf = [];
+    for (var i = 0; i < count; i++) buf.push(msg[i % msg.length].charCodeAt(0));
+    return buf;
+  };
 
   P.resetCounters = function () {
     S.c = { corrected: 0, uncorrectable: 0, symbolErrors: 0, codewords: 0,
@@ -1776,6 +1802,10 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 
   P.initControls = function () {
     buildRail();
+    $('msg-input').addEventListener('input', function (e) {
+      S.messageContent = e.target.value || 'Call me Ishmael';
+      P.emit('message');
+    });
     $('btn-play').onclick = function () { P.setPlaying(!S.playing); };
     $('btn-step').onclick = P.step;
     $('sel-speed').onchange = function (e) { S.speed = +e.target.value; };

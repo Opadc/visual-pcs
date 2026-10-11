@@ -99,6 +99,10 @@
 
   P.initControls = function () {
     buildRail();
+    $('msg-input').addEventListener('input', function (e) {
+      S.messageContent = e.target.value || 'Call me Ishmael';
+      P.emit('message');
+    });
     $('btn-play').onclick = function () { P.setPlaying(!S.playing); };
     $('btn-step').onclick = P.step;
     $('sel-speed').onchange = function (e) { S.speed = +e.target.value; };

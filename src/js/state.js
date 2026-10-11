@@ -9,6 +9,7 @@
     playing: true, speed: 1, u: 320,
     width: 4, preset: 'grouped',
     selected: -1, stage: null,
+    messageContent: 'Call me Ishmael',
     faults: { skewLane: 1, skewNs: 0, amLane: 3, amLoss: false, losLane: 0, los: false,
               noiseLane: -1, noise: 0, swap: false },
     rot: [0, 0, 0, 0, 0, 0, 0, 0],
@@ -20,6 +21,22 @@
   var listeners = [];
   P.on = function (fn) { listeners.push(fn); };
   P.emit = function (what) { listeners.forEach(function (fn) { fn(what); }); };
+
+  // Per-lane message slices: lane i gets bytes [i, i+8, i+16, ...]
+  P.messageLaneSlice = function (lane) {
+    var msg = S.messageContent || '';
+    var bytes = [];
+    for (var i = lane; i < msg.length; i += 8) bytes.push(msg.charCodeAt(i));
+    return bytes;
+  };
+
+  // Message as a repeating buffer of bytes, padded to frame size
+  P.messageBytes = function (count) {
+    var msg = (S.messageContent || '').split('');
+    var buf = [];
+    for (var i = 0; i < count; i++) buf.push(msg[i % msg.length].charCodeAt(0));
+    return buf;
+  };
 
   P.resetCounters = function () {
     S.c = { corrected: 0, uncorrectable: 0, symbolErrors: 0, codewords: 0,

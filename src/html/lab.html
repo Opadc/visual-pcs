@@ -6,7 +6,10 @@
 
   <div class="toolbar" role="toolbar" aria-label="Lane lab controls">
     <div class="tgroup" aria-label="Playback">
-      <button type="button" id="btn-play" class="btn primary" aria-pressed="true" title="Pause or resume (Space)">Pause</button>
+      <label class="field"><span>Message</span>
+        <input type="text" id="msg-input" placeholder="Call me Ishmael" value="Call me Ishmael" maxlength="32" aria-label="Message to track through the pipeline">
+      </label>
+      <button type="button" id="btn-play" class="btn primary" aria-pressed="true" title="Pause or resume (P)">Pause</button>
       <button type="button" id="btn-step" class="btn" title="Advance one data unit (.)">Step</button>
       <label class="field"><span>Speed</span>
         <select id="sel-speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option></select>

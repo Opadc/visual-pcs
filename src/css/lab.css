@@ -14,6 +14,12 @@ select, .btn, .segbtn, .chip {
   min-height: 34px; padding: 4px 11px; cursor: pointer;
 }
 select { padding-right: 6px; }
+input[type="text"] {
+  font-family: var(--f-mono); font-size: var(--s-0); color: var(--ink);
+  background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius);
+  padding: 6px 8px; min-width: 160px;
+}
+input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }
 .btn:hover, .segbtn:hover, .chip:hover, select:hover { border-color: var(--scene-edge); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); min-width: 84px; font-weight: 600; }
