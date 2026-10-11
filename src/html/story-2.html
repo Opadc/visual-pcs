@@ -6,7 +6,8 @@
     <div class="figwrap" id="fig-am"></div>
     <figcaption>One alignment marker, 15 bytes. The eight markers go in together, so they leave the transmitter lined up across all lanes.</figcaption>
   </figure>
-  <p>In 200GBASE-R the AM group repeats every 81,920 257-bit blocks of the aggregate stream, about 2.6 Mbit or 99 µs on each PCS lane. The lab shrinks that spacing so you can see markers pass. Because AMs are detected in raw lane data before FEC decoding, the receiver tolerates a few bit errors in them.</p>
+  <p>In 200GBASE-R the AM group repeats every 81,920 257-bit blocks, which is exactly 2,048 codeword pairs: about 2.6 Mbit or 99 µs on each PCS lane. The lab puts a group in every codeword pair so you can watch markers pass. Because AMs are detected in raw lane data before FEC decoding, the receiver tolerates a few bit errors in them.</p>
+  <p>The group is not laid down marker by marker. Its 960 marker bits are pre-interleaved 10 bits at a time, so that after pre-FEC distribution and symbol distribution each PCS lane's first 12 symbols are exactly its own 120-bit marker. Open the bit lens in the lab to watch it happen.</p>
 </section>
 
 <section id="mux" aria-labelledby="mux-title">

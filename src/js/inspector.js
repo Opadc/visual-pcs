@@ -105,21 +105,29 @@
   P.inspectorOpen = function () { return !!picked; };
 
   // Previous / next block in the same family: along the lane, or along the stream.
+  // Higher indices are further back in the stream, so "next" means sent later.
+  function stepKey(m, dir) {
+    if (m.fam === 'lane') return 'lane:' + m.p + ':' + (m.n + dir);
+    if (m.fam === 'b66') return 'b66:' + (m.t + dir);
+    if (m.fam === 'b257') return 'b257:' + (m.s + dir);
+    if (m.fam === 'row') {
+      var c = m.c + dir, q = m.q;
+      if (c < 0) { c = P.ROW_CUBES.length - 1; q--; } else if (c >= P.ROW_CUBES.length) { c = 0; q++; }
+      return 'row:' + q + ':' + m.w + ':' + c;
+    }
+    return null;
+  }
   function stepBlock(dir) {
     if (!picked) return;
-    // Higher n is further back in the stream, so "next" means sent later.
-    var m = picked.meta, key = m.fam === 'lane' ? 'lane:' + m.p + ':' + (m.n + dir)
-      : m.fam + ':' + (m.row == null ? '' : m.row) + ':' + (m.n + dir);
-    var i = P.findPacket(key);
+    var key = stepKey(picked.meta, dir), i = key ? P.findPacket(key) : -1;
     if (i >= 0) { picked = { key: key, meta: P.packetMeta(i) }; symSel = -1; lastSig = ''; P.updateInspector(); }
   }
 
-  // Called every frame after drawPackets.
-  // 66-bit block 4m sits where 257-bit block m is, so the card can follow a
-  // block through the transcode in either direction.
+  // Called every frame after drawPackets. When a block leaves its stage, the
+  // card follows it into the next form: 66-bit slot t sits in 257-bit slot t/4.
   function handoff(m) {
-    if (m.fam === 'g66') return 'g257::' + Math.floor(m.n / 4);
-    if (m.fam === 'g257') return 'g66::' + 4 * m.n;
+    if (m.fam === 'b66') return 'b257:' + Math.floor(m.t / 4);
+    if (m.fam === 'b257') return 'b66:' + 4 * m.s;
     return null;
   }
 
@@ -150,7 +158,7 @@
 
     var d = P.describePacket(m);
     var fwk = P.followed && P.followed();
-    var sig = (fwk ? fwk.s : '') + '|' + P.payloadVersion + '|' + d.title + '|' + d.where + '|' + d.state + '|' + S.playing + '|' + symSel + '|' + (d.lane ? d.lane.rxPma + ':' + d.lane.serdes : '');
+    var sig = (fwk ? fwk.s : '') + '|' + P.payloadVersion + '|' + d.kind + '|' + d.title + '|' + d.where + '|' + d.state + '|' + S.playing + '|' + symSel + '|' + (d.lane ? d.lane.rxPma + ':' + d.lane.serdes : '');
     if (sig !== lastSig) { lastSig = sig; card.innerHTML = render(d); }
     place(b);
   };
@@ -191,34 +199,35 @@
     return h;
   }
 
-  // A PCS lane unit: 20 bits = codeword A symbol + codeword B symbol, drawn
-  // over the characters they came from. Partial characters are faded.
-  function pairRuler(d) {
-    var pr = d.pair;
-    if (pr.parity) return '<p class="ins-note">Parity: symbol ' + pr.j + ' of codeword A and of codeword B, computed by the RS(544,514) encoder. Parity carries no text.</p>';
-    var bitsA = pr.a.bin, bitsB = pr.b.bin, hdr = pr.a.parts[0].kind === 'hdr';
-    var h = '<div class="ruler"><div class="rrow chars">' + (hdr ? '<span class="rc hdrbit" style="flex:1"><b>1</b><i>hdr</i></span>' : '');
-    d.cover.forEach(function (cv) { h += '<span class="rc" style="flex:' + cv.n + '">' + cell(cv.idx, '', cv.n < 8 ? cv.n : 0) + '</span>'; });
-    h += '</div><div class="rrow syms2"><span class="rs a" style="flex:10"><b>' + pr.a.hex + '</b><i>codeword A</i></span>' +
-      '<span class="rs b" style="flex:10"><b>' + pr.b.hex + '</b><i>codeword B</i></span></div>' +
-      '<div class="rrow bits"><span style="flex:10">' + bitsA + '</span><span style="flex:10">' + bitsB + '</span></div></div>';
-    var whole = d.cover.filter(function (cv) { return cv.n === 8; }).length;
-    h += '<p class="ins-note">20 bits, one symbol from each codeword: ' + whole + ' whole character' + (whole === 1 ? '' : 's') +
-      ' plus pieces of ' + (d.cover.length - whole) + ' more. The next 20 bits go to lane ' + ((d.lane.pcs + 1) % 8) +
-      ', so one lane never holds a whole word.</p>';
+  // One lane cube = 4 consecutive PCS-lane symbols. Symbol distribution deals
+  // them from alternating codewords, 4 positions apart, so they are not
+  // neighbours in the text.
+  function laneSymbols(d) {
+    var h = '<div class="lsyms">';
+    d.symbols.forEach(function (s, n) {
+      var cls = s.parity ? ' par' : s.parts.some(function (pt) { return pt.kind === 'am'; }) ? ' am' : '';
+      h += '<button type="button" class="lsym ' + (s.w ? 'b' : 'a') + cls + (n === symSel ? ' on' : '') + '" data-act="sym" data-i="' + n + '">' +
+        '<b>' + (s.w ? 'B' : 'A') + s.i + '</b><i>' + (s.parity ? 'parity' : s.hex) + '</i></button>';
+    });
+    h += '</div>';
+    if (symSel >= 0) h += symbolLine(d.symbols[symSel]);
+    else if (d.am) h += '<p class="ins-note">These symbols are lane ' + d.lane.pcs + '’s alignment marker. The AM group was pre-interleaved ' +
+      'so that symbol distribution hands every lane its own 120-bit marker as its first 12 symbols.</p>';
+    else h += '<p class="ins-note">Lane symbol k comes from codeword ' + (d.lane.pcs & 1 ? 'B' : 'A') + ' when k is even and ' + (d.lane.pcs & 1 ? 'A' : 'B') +
+      ' when it is odd, at codeword position 4k + ' + (d.lane.pcs >> 1) + '. Click a symbol to see its bits.</p>';
     return h;
   }
 
   function symbolLine(s) {
-    if (s.parity) return '<p class="ins-note">RS parity symbol ' + s.j + ' of codeword ' + (s.w ? 'B' : 'A') +
-      '. The encoder computes the 30 parity symbols from the 514 data symbols. They carry no text.</p>';
+    if (s.parity) return '<p class="ins-note">' + (s.w ? 'B' : 'A') + s.i + ' is parity symbol ' + (s.p + 1) + ' of 30. The RS(544,514) encoder computes it from the 514 message symbols. It carries no text.</p>';
     var bits = '', legend = [];
     s.parts.forEach(function (pt, k) {
       bits += '<span class="sb c' + (k % 3) + '">' + pt.bits + '</span>';
-      legend.push(pt.kind === 'hdr'
-        ? '<span class="c' + (k % 3) + '">header bit of 257-bit block ' + pt.block + '</span>'
-        : '<span class="c' + (k % 3) + '">' + (pt.whole ? 'all 8 bits' : pt.n + ' bit' + (pt.n > 1 ? 's' : '') + ' (' + (pt.n > 1 ? pt.hi + '–' + pt.lo : pt.hi) + ')') +
-          ' of ' + q(pt.ch) + '</span>');
+      var what = pt.kind === 'hdr' ? 'the header bit of 257-bit block ' + pt.block
+        : pt.kind === 'am' ? pt.n + ' bit' + (pt.n > 1 ? 's' : '') + ' of am_' + pt.lane + ' ' + pt.field
+        : pt.kind === 'pad' ? pt.n + ' bits of the AM pad' : pt.kind === 'sf' ? 'the AM status field'
+        : (pt.n === 8 ? 'all 8 bits' : pt.n + ' bit' + (pt.n > 1 ? 's' : '')) + ' of ' + q(pt.ch);
+      legend.push('<span class="c' + (k % 3) + '">' + what + '</span>');
     });
     // A few characters either side, so repeated letters can be told apart.
     var idx = s.parts.filter(function (pt) { return pt.kind === 'byte'; }).map(function (pt) { return pt.idx; });
@@ -231,8 +240,22 @@
       }
       ctx = '<p class="ins-ctx">In the text: <code>…' + ctx + '…</code></p>';
     }
-    return '<div class="ins-sym"><span class="symhex">' + s.hex + '</span><span class="symbin">' + bits + '</span></div>' +
+    return '<div class="ins-sym"><span class="symhex">' + (s.w ? 'B' : 'A') + s.i + ' = ' + s.hex + '</span><span class="symbin" title="bit 0 first">' + bits + '</span></div>' +
       '<p class="ins-src">' + legend.join(' + ') + '</p>' + ctx;
+  }
+
+  // The 1028-bit AM group: 96 interleaved 10-bit symbols, the pad and status.
+  function amGroup() {
+    var h = '<div class="amgrid">';
+    for (var t = 0; t < 96; t++) {
+      var k = t >> 3, r = t & 7, j = r >> 1, x = (k % 2 === 0) === ((r & 1) === 0) ? 2 * j : 2 * j + 1;
+      h += '<span class="ams l' + x + '" title="symbol ' + t + ': am_' + x + ' bits ' + (10 * k) + '–' + (10 * k + 9) + '">' + x + '</span>';
+    }
+    h += '</div><p class="ins-note">1028 bits = 8 markers × 120 + 65-bit pad + 3-bit status, the size of four 257-bit blocks. ' +
+      'Each cell is 10 bits of one lane’s marker, numbered by lane. The order looks scrambled on purpose: after pre-FEC distribution ' +
+      'and symbol distribution, every PCS lane receives exactly its own 120-bit marker.</p>' +
+      '<p class="ins-note">Inserted after the scrambler, once every 81,920 257-bit blocks (2,048 codeword pairs). The lab inserts one every pair so you can watch it.</p>';
+    return h;
   }
 
   function render(d) {
@@ -251,26 +274,32 @@
       h += '<p class="ins-note">' + (d.kind === 'mii'
         ? '8 data bytes per transfer. Control characters (preamble, idles, terminate) are left out of this model.'
         : 'Same 8 bytes plus a 2-bit sync header. 01 means the block is all data.') + '</p>';
+    } else if (d.kind === 'idle') {
+      h += '<p class="ins-note">Idle characters between frames. Rate matching deletes enough of them to leave room for the 1028-bit AM group, ' +
+        'so the data rate does not change when markers are added.</p>';
     } else if (d.kind === 'b257') {
       h += '<p class="ins-ascii">' + text(d.start, 32) + '</p><div class="cells wrap"><span class="cell hdr"><b>1</b><i>hdr</i></span>' +
         [0, 1, 2, 3].map(function (g) { return '<span class="grp">' + cells(d.start + g * 8, 8, d.scrambled ? 'scr' : '') + '</span>'; }).join('') + '</div>';
       h += '<p class="ins-note">Four 66-bit blocks (' + d.from66[0] + '–' + d.from66[1] + ') packed into one: their four 2-bit headers become a single 1. ' +
+        'Slot ' + (d.slot + 1) + ' of 40 in codeword pair ' + d.pair + '. ' +
         (d.scrambled ? 'This block is <b>scrambled</b>. On the wire the bits look random; the text is shown unscrambled so you can follow it.' : '') + '</p>';
     } else if (d.kind === 'amgroup') {
-      h += '<p class="ins-note">Eight alignment markers, one for each PCS lane, inserted together after the scrambler. Each is 120 bits: common bytes for finding it, unique bytes naming the lane. They are not part of the text.</p>';
+      h += amGroup();
     } else if (d.kind === 'cw') {
-      h += '<p class="ins-note">10-bit RS symbols. Characters are 8 bits, so symbol edges no longer line up with them. The text is unreadable here until post-FEC interleave on the RX side.</p>';
+      var data = d.symbols.length - d.parityCount;
+      h += '<p class="ins-note">' + (d.parityCount
+        ? 'The 30 parity symbols the RS(544,514) encoder appends to codeword ' + (d.w ? 'B' : 'A') + '. Message symbols 0–513 plus these = 544.'
+        : data + ' message symbols. Pre-FEC distribution dealt the stream 10 bits at a time: A gets bits 20i…20i+9, B gets 20i+10…20i+19.' +
+          (d.amCount ? ' The first ' + d.amCount + ' symbols here hold the AM group.' : '')) + '</p>';
       h += '<div class="syms">' + d.symbols.map(function (s, i) {
-        return '<button type="button" class="sym' + (s.parity ? ' par' : '') + (i === symSel ? ' on' : '') + '" data-act="sym" data-i="' + i + '">' +
+        var am = !s.parity && s.parts.some(function (pt) { return pt.kind === 'am' || pt.kind === 'pad' || pt.kind === 'sf'; });
+        return '<button type="button" class="sym' + (s.parity ? ' par' : am ? ' am' : '') + (i === symSel ? ' on' : '') + '" data-act="sym" data-i="' + i + '" title="' + (d.w ? 'B' : 'A') + s.i + '">' +
           (s.parity ? 'P' : s.hex) + '</button>';
       }).join('') + '</div>';
       if (symSel >= 0) h += symbolLine(d.symbols[symSel]);
-      else if (d.sources.length) h += '<p class="ins-src">Holds bits of: <span class="ins-ascii sm">' + text(d.sources[0].idx, d.sources[d.sources.length - 1].idx - d.sources[0].idx + 1) + '</span> Click a symbol to see which bits.</p>';
-      if (d.parityCount) h += '<p class="ins-note">P = parity symbols added by the RS(544,514) encoder.</p>';
-    } else if (d.kind === 'pair') {
-      h += pairRuler(d);
-    } else if (d.kind === 'am') {
-      h += '<p class="ins-note">The alignment marker for PCS lane ' + d.lane.pcs + '. The receiver finds it by its common bytes and reads the lane number from its unique bytes. That is how lane identity survives the trip.</p>';
+      else if (d.sources.length) h += '<p class="ins-src">Holds bits of: <span class="ins-ascii sm">' + text(d.sources[0], d.sources[d.sources.length - 1] - d.sources[0] + 1) + '</span> Click a symbol to see which bits.</p>';
+    } else if (d.kind === 'lane') {
+      h += laneSymbols(d);
     }
 
     var fw = P.followed && P.followed();
@@ -278,7 +307,7 @@
       var part = d.cover ? P.wordPart(d.cover, fw) : '';
       h += '<p class="ins-follow">Following <b>\u201C' + esc(fw.text) + '\u201D</b>' + (part ? ': this block holds <b>' + esc(part) + '</b>' : ': not in this block') +
         ' <button type="button" class="linkbtn" data-act="unfollow">Stop</button></p>';
-    } else if (d.kind !== 'amgroup' && d.kind !== 'am' && !(d.pair && d.pair.parity)) {
+    } else if (d.cover && d.cover.length) {
       h += '<p class="ins-hint">Click a word to light up every block that carries it.</p>';
     }
     if (d.lane) {

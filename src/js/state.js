@@ -85,7 +85,7 @@
   // Sequence index n of the newest data unit on PCS lane p that has passed x.
   P.seqAt = function (p, x) {
     var U = P.unwarp(x, S.segs[p]);
-    return Math.floor((P.X.lanesStart + S.u - U) / P.GAP);
+    return Math.floor((S.u - U) / P.GAP);
   };
   function amIndexAt(p) { return Math.floor(P.seqAt(p, P.X.amLock) / P.AM_PERIOD); }
 

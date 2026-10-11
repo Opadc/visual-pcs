@@ -80,6 +80,32 @@ input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offs
 .lbl-zone { font-family: var(--f-display); font-stretch: 125%; font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: var(--muted); }
 .lbl-callout { font-size: 11px; font-weight: 600; color: var(--ink); background: var(--panel); border: 1px solid var(--lc); border-radius: 3px; padding: 2px 6px; box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 12%, transparent); }
 
+.lens { margin-top: 10px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); }
+.lens.open { border-color: var(--ink); }
+.lens-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 10px; }
+.lens-bar h3 { font-size: var(--s-0); letter-spacing: 0.07em; text-transform: uppercase; font-stretch: 100%; }
+.lens-modes { display: flex; flex-wrap: wrap; gap: 6px; }
+.lens-modes .btn { min-height: 30px; padding: 2px 10px; font-size: 0.8rem; }
+.lens-hint { font-family: var(--f-mono); font-size: 0.68rem; color: var(--muted); }
+.lens-body { border-top: 1px solid var(--rule-2); padding: 8px 10px 10px; display: grid; gap: 8px; }
+.lenswrap { overflow-x: auto; }
+.lenswrap canvas { display: block; width: 100%; min-width: 620px; }
+.lens-foot { display: flex; gap: 12px; align-items: start; justify-content: space-between; flex-wrap: wrap; }
+.lens-foot .note { max-width: 80ch; }
+.sd-lens { font-size: 0.9rem; }
+.lsyms { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.lsym { display: grid; justify-items: center; gap: 1px; padding: 4px 0; border-radius: 2px; border: 1px solid transparent; cursor: pointer; font-family: var(--f-mono); color: var(--ink); }
+.lsym b { font-size: 0.82rem; } .lsym i { font-style: normal; font-size: 0.66rem; color: var(--ink-2); }
+.lsym.a { background: color-mix(in srgb, var(--cw-a) 30%, var(--panel)); }
+.lsym.b { background: color-mix(in srgb, var(--cw-b) 40%, var(--panel)); }
+.lsym.am { background: color-mix(in srgb, var(--am) 35%, var(--panel)); }
+.lsym.par { background: color-mix(in srgb, var(--ink) 70%, var(--panel)); color: var(--paper); }
+.lsym.par i { color: var(--paper); }
+.lsym.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.sym.am { background: color-mix(in srgb, var(--am) 35%, var(--panel)); }
+.amgrid { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; }
+.ams { font-family: var(--f-mono); font-size: 0.62rem; font-weight: 700; text-align: center; line-height: 16px; border-radius: 2px; color: var(--paper); background: var(--lc); }
+
 .rail { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 0; margin-top: 10px; border-bottom: 1px solid var(--rule); }
 .rail button {
   display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; gap: 2px 7px; align-items: center; text-align: left;

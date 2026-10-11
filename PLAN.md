@@ -1,32 +1,31 @@
-# Block inspector: what each block carries
+# Visual PCS: data model and scene
 
-Click any block in the 3D lane map to see its contents. The animation pauses, the
-block is outlined, and a card next to it shows the data. Prev/Next step along the
-stream or the lane; "Resume and follow" keeps the card on the block as it moves.
+The lab follows the IEEE P802.3bs D3.1 Clause 119 transmit equations for
+200GBASE-R. Tests in `test/payload.test.mjs` check the model against them.
 
-## Data model (simplified for newcomers)
+## Bit model (`src/js/payload.js`)
 
-- The MAC sends a repeating ASCII passage (default: the opening of Moby-Dick,
-  editable in the toolbar) as plain data bytes. Preamble, FCS, idles and other
-  control characters are left out.
-- 200GMII transfer n = 66-bit block n = 8 bytes, sync header `01`.
-- 257-bit block m = 66-bit blocks 4m..4m+3, header bit `1`, 32 bytes.
-- Scrambling is shown by colour only; the card shows the unscrambled text.
-- AM groups are inserted between 257-bit blocks and carry no text.
-- Pre-FEC distribution cuts the 257-bit stream into 10-bit symbols and
-  alternates them between codewords A and B. 40 blocks fill one codeword pair.
-  From here until post-FEC interleave on RX, characters are not visible; the
-  card shows 10-bit symbols and which bits of which characters each contains.
-- RS(544,514) adds 30 parity symbols per codeword, shown as `P`. No real
-  Reed–Solomon arithmetic is done.
-- Symbol distribution (simplified): each PCS lane takes one symbol from A, then
-  one from B, round-robin across the 8 lanes. A PCS lane carries symbols, not
-  characters.
+- The MAC sends a repeating ASCII passage (default: the opening of Moby-Dick)
+  as plain data bytes. Preamble, FCS and control characters are left out.
+  Scrambling is shown by colour only; bits are the unscrambled ones.
+- One codeword pair carries a 10,280-bit block:
+  - with an AM group: `am_mapped<1027:0>` then 36 x 257-bit blocks
+  - without one: 40 x 257-bit blocks
+- AM group (119.2.4.4.1): 8 lane markers from Table 119-1, 10-bit interleaved,
+  plus a 65-bit pad (placeholder pattern, not PRBS9) and 3 status bits.
+  The standard inserts one every 81,920 blocks (2,048 pairs); the lab uses every pair.
+- Pre-FEC distribution (119.2.4.5): m_A symbol i = bits 20i..20i+9,
+  m_B symbol i = bits 20i+10..20i+19. Pre-FEC scrambling is not modelled.
+- RS(544,514): 514 message + 30 parity symbols. Parity values are not computed.
+- Symbol distribution (119.2.4.8): tx_out<8k+2j> = c_A<543-4k-j> on even k,
+  c_B on odd k; tx_out symbol s goes to PCS lane s mod 8. Each lane's first
+  12 symbols are its own 120-bit marker.
 
-## Files
+## Scene
 
-- `src/js/payload.js`: payload bytes and the block/symbol mapping (pure, tested)
-- `src/js/inspect-model.js`: describes a picked block (pure)
-- `src/js/inspector.js`: picking, outline, card
-- `src/js/packets.js`: records an identity for every drawn block
-- `test/payload.test.mjs`: bytes survive 66b → 257b → symbols → 257b
+- One codeword pair spans the same track length at every stage: 160 x 66-bit
+  slots, 40 x 257-bit slots, 17 cubes per codeword (the last is the 30 parity
+  symbols), 34 lane cubes of 4 symbols each (the first 3 are the marker).
+- Click any block for its contents; click a word to follow it.
+- The bit lens shows one operation at bit scale: AM insertion, pre-FEC
+  distribution, RS(544,514), symbol distribution, PMA bit-mux.

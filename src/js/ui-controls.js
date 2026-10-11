@@ -21,6 +21,7 @@
 
   P.step = function () {
     if (S.playing) P.setPlaying(false);
+    P.lensStep && P.lensStep();
     S.stepTo = (S.stepTo != null ? S.stepTo : S.u) + P.GAP;
     P.fecPulse(P.tick());
   };
@@ -63,9 +64,15 @@
     var d = $('stage-detail');
     d.innerHTML = '<div class="sd-head"><span class="sd-num">' + st.n + '</span><span class="sd-side ' + st.side.toLowerCase() + '">' +
       st.side + '</span><h3>' + st.title + '</h3></div><div class="sd-body">' + st.body +
-      '<p class="sd-watch"><b>In the scene:</b> ' + st.watch + '</p></div><div class="sd-nav">' +
+      '<p class="sd-watch"><b>In the scene:</b> ' + st.watch + '</p>' +
+      (st.lens ? '<p class="sd-lens">See it at bit scale: ' + st.lens.map(function (m) {
+        return '<button type="button" class="linkbtn" data-open-lens="' + m + '">' + P.LENS_MODES[m].title + '</button>';
+      }).join(' · ') + '</p>' : '') + '</div><div class="sd-nav">' +
       '<button type="button" class="btn" id="sd-prev"' + (n === 1 ? ' disabled' : '') + '>← Previous stage</button>' +
       '<button type="button" class="btn" id="sd-next"' + (n === 9 ? ' disabled' : '') + '>Next stage →</button></div>';
+    d.querySelectorAll('[data-open-lens]').forEach(function (b) {
+      b.onclick = function () { P.setLens(b.dataset.openLens); $('lens').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+    });
     $('sd-prev').onclick = function () { P.goStage(n - 1, true); };
     $('sd-next').onclick = function () { P.goStage(n + 1, true); };
     document.querySelectorAll('.rail button').forEach(function (b) {

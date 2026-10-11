@@ -84,7 +84,7 @@
         var slot = ((b % k) + k) % k, p = lanes[slot].pcs, n = Math.floor(b / k);
         var x = x0 + (c - frac) * cw;
         if (x < x0 - 0.5) continue;
-        var isAm = ((n % P.AM_PERIOD) + P.AM_PERIOD) % P.AM_PERIOD === 0;
+        var isAm = P.isAmUnit(n);
         var col = dead ? g.muted : g.lanes[p];
         ctx.globalAlpha = sel >= 0 && sel !== p ? 0.18 : 1;
         ctx.fillStyle = col;

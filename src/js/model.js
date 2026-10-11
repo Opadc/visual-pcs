@@ -8,8 +8,15 @@
   P.DESKEW_CAP_NS = 180;       // skew budget at the PCS receive input (IEEE 802.3 Table 116-7)
   P.AM_LOSS_COUNT = 3;         // conceptual: consecutive bad AMs before lock is dropped
   P.AM_ACQUIRE_COUNT = 2;      // conceptual: matching AMs at the right spacing to lock
-  P.AM_PERIOD = 10;            // visual units between AMs (the real spacing is about 2.6 Mbit per lane)
-  P.GAP = 1.0;                 // visual spacing of data units on a PCS lane
+  // Scene lane cubes are 4 PCS-lane symbols (40 bits); a codeword pair is 136
+  // symbols per lane, so 34 cubes. The first 3 cubes (12 symbols, 120 bits) of
+  // an AM pair are that lane's alignment marker. The scene inserts an AM group
+  // every AM_PAIRS codeword pairs; the standard does it every 2048.
+  P.UNITS_PER_PAIR = 34;
+  P.AM_UNITS = 3;
+  P.AM_PAIRS = 1;
+  P.AM_PERIOD = P.UNITS_PER_PAIR * P.AM_PAIRS;   // lane cubes from one AM to the next
+  P.GAP = 1.0;                 // track length of one lane cube (4 symbols); a codeword pair is 34 units at every stage
 
   P.WIDTHS = {
     8: { lanes: 8, mod: 'NRZ', baud: 26.5625, gbps: 26.5625, ex: '200GAUI-8' },

@@ -1,9 +1,16 @@
-/* What each block in the scene carries. The MAC sends a repeating ASCII text as
-   plain data bytes (no preamble, FCS, idles or other control characters).
-   64B/66B, 256B/257B and scrambling keep the bytes intact here; scrambling is
-   shown by colour only. From pre-FEC distribution onward the stream is cut into
-   10-bit symbols, so characters are no longer visible until post-FEC interleave.
-   Pure functions, no DOM. */
+/* Bit-level model of the 200GBASE-R transmit path, following the IEEE P802.3bs
+   D3.1 Clause 119 equations. The MAC sends a repeating ASCII passage as plain
+   data bytes (no preamble, FCS or control characters). Scrambling is shown by
+   colour only, so the bits here are the unscrambled ones. Pure functions, no DOM.
+
+   One codeword pair q carries a 10280-bit block, tx_scrambled_am:
+     with an AM group:    am_mapped<1027:0> then 36 x 257-bit blocks
+     without an AM group: 40 x 257-bit blocks
+   Pre-FEC distribution (119.2.4.5): message symbol i of m_A is bits 20i..20i+9,
+   of m_B is bits 20i+10..20i+19. RS(544,514) appends 30 parity symbols.
+   Symbol distribution (119.2.4.8): tx_out<8k+2j> = c_A<543-4k-j> on even k,
+   c_B on odd k (tx_out<8k+2j+1> takes the other), and tx_out symbol s goes to
+   PCS lane s mod 8. Bit 0 of every symbol is sent first. */
 (function (P) {
   'use strict';
 
@@ -12,13 +19,30 @@
     'little and see the watery part of the world. ';
   P.PAYLOAD_SOURCE = 'Herman Melville, Moby-Dick (1851)';
 
-  P.CW_N = 544;                       // RS(544,514) symbols per codeword
-  P.CW_K = 514;                       // data symbols per codeword
-  P.PAIR_BLOCKS = 40;                 // 2 x 514 x 10 bits = 40 x 257-bit blocks
-  P.LANE_SYM_PER_PAIR = 2 * P.CW_N / P.N_PCS;   // 136 symbols per PCS lane per codeword pair
-  P.LANE_PAIRS = P.CW_N / P.N_PCS;              // 68 A+B symbol pairs per PCS lane per codeword pair
-  P.CHUNK = 32;                       // symbols per codeword cube in the scene
-  P.CHUNKS = Math.ceil(P.CW_N / P.CHUNK);       // 17 cubes per codeword; the last holds the parity
+  P.CW_N = 544;                    // symbols per codeword
+  P.CW_K = 514;                    // message (data) symbols per codeword
+  P.CW_P = 30;                     // parity symbols per codeword
+  P.PAIR_BITS = 10280;             // 2 x 514 x 10
+  P.PAIR_SLOTS = 40;               // 257-bit block slots per codeword pair
+  P.AM_BITS = 1028;                // 8 x 120 + 65 pad + 3 status = 4 x 257
+  P.AM_SLOTS = 4;
+  P.AM_PAIRS_STD = 2048;           // 81 920 blocks / 40 = one AM group every 2048 codeword pairs
+  P.LANE_SYM = 136;                // symbols per PCS lane per codeword pair
+  P.UNIT_SYM = 4;                  // symbols per lane cube in the scene
+  // P.UNITS_PER_PAIR, P.AM_UNITS and P.AM_PAIRS come from model.js.
+
+  // Table 119-1, octets {CM0,CM1,CM2,UP0,CM3,CM4,CM5,UP1,UM0,UM1,UM2,UP2,UM3,UM4,UM5}, each sent LSB first.
+  P.AM_TABLE = [
+    [0x9A, 0x4A, 0x26, 0x05, 0x65, 0xB5, 0xD9, 0xD6, 0xB3, 0xC0, 0x8C, 0x29, 0x4C, 0x3F, 0x73],
+    [0x9A, 0x4A, 0x26, 0x04, 0x65, 0xB5, 0xD9, 0x67, 0x5A, 0xDE, 0x7E, 0x98, 0xA5, 0x21, 0x81],
+    [0x9A, 0x4A, 0x26, 0x46, 0x65, 0xB5, 0xD9, 0xFE, 0x3E, 0xF3, 0x56, 0x01, 0xC1, 0x0C, 0xA9],
+    [0x9A, 0x4A, 0x26, 0x5A, 0x65, 0xB5, 0xD9, 0x84, 0x86, 0x80, 0xD0, 0x7B, 0x79, 0x7F, 0x2F],
+    [0x9A, 0x4A, 0x26, 0xE1, 0x65, 0xB5, 0xD9, 0x19, 0x2A, 0x51, 0xF2, 0xE6, 0xD5, 0xAE, 0x0D],
+    [0x9A, 0x4A, 0x26, 0xF2, 0x65, 0xB5, 0xD9, 0x4E, 0x12, 0x4F, 0xD1, 0xB1, 0xED, 0xB0, 0x2E],
+    [0x9A, 0x4A, 0x26, 0x3D, 0x65, 0xB5, 0xD9, 0xEE, 0x42, 0x9C, 0xA1, 0x11, 0xBD, 0x63, 0x5E],
+    [0x9A, 0x4A, 0x26, 0x22, 0x65, 0xB5, 0xD9, 0x32, 0xD6, 0x76, 0x5B, 0xCD, 0x29, 0x89, 0xA4]
+  ];
+  P.AM_FIELDS = ['CM0', 'CM1', 'CM2', 'UP0', 'CM3', 'CM4', 'CM5', 'UP1', 'UM0', 'UM1', 'UM2', 'UP2', 'UM3', 'UM4', 'UM5'];
 
   var bytes = [];
   P.payloadVersion = 0;
@@ -35,6 +59,7 @@
   P.setPayload('');
 
   function mod(a, n) { return ((a % n) + n) % n; }
+  P.mod = mod;
   P.byteAt = function (i) { return bytes[mod(i, bytes.length)]; };
   P.byteRange = function (start, len) {
     var out = [];
@@ -42,110 +67,135 @@
     return out;
   };
 
-  // 200GMII transfer n and 66-bit block n carry the same 8 bytes; 257-bit block m carries 66-bit blocks 4m..4m+3.
-  P.miiBytes = function (n) { return P.byteRange(8 * n, 8); };
-  P.block66 = function (n) { return { hdr: '01', bytes: P.byteRange(8 * n, 8) }; };
-  P.block257 = function (m) { return { hdr: '1', bytes: P.byteRange(32 * m, 32), first66: 4 * m }; };
+  P.isAmPair = function (q) { return mod(q, P.AM_PAIRS) === 0; };
+  // AM pairs in [0, q): ceil(q / AM_PAIRS), also right for negative q.
+  function amPairsBefore(q) { return Math.ceil(q / P.AM_PAIRS); }
 
-  // Bit b of the transcoded stream. Each 257-bit block is a 1-bit header (1 = all four
-  // 66-bit blocks are data) followed by 32 bytes, each sent MSB first in this model.
-  function streamBit(b) {
-    var m = Math.floor(b / 257), o = b - m * 257;
-    if (o === 0) return { v: 1, src: 'h', idx: m };
-    var k = 32 * m + ((o - 1) >> 3), bit = 7 - ((o - 1) & 7);
-    return { v: (P.byteAt(k) >> bit) & 1, src: 'b', idx: k, bit: bit };
-  }
-
-  // 10-bit symbol t of the stream, with the bytes (or header bits) its bits came from.
-  P.streamSymbol = function (t) {
-    var v = 0, parts = [];
-    for (var i = 0; i < 10; i++) {
-      var s = streamBit(10 * t + i), last = parts[parts.length - 1];
-      v = (v << 1) | s.v;
-      if (last && last.src === s.src && last.idx === s.idx) { last.n++; last.lo = s.bit; last.bits += s.v; }
-      else parts.push({ src: s.src, idx: s.idx, n: 1, hi: s.bit, lo: s.bit, bits: String(s.v) });
-    }
-    return { value: v, parts: parts };
+  // 257-bit slot s of the stream after AM insertion.
+  P.slot257 = function (s) {
+    var q = Math.floor(s / P.PAIR_SLOTS), r = s - q * P.PAIR_SLOTS, am = P.isAmPair(q);
+    if (am && r < P.AM_SLOTS) return { q: q, r: r, am: true };
+    var m = q * P.PAIR_SLOTS - P.AM_SLOTS * amPairsBefore(q) + r - (am ? P.AM_SLOTS : 0);
+    return { q: q, r: r, am: false, block: m };
+  };
+  // 66-bit slot t: four per 257-bit slot. AM slots hold idles that rate matching deletes.
+  P.slot66 = function (t) {
+    var s = P.slot257(Math.floor(t / 4));
+    return s.am ? { idle: true, q: s.q } : { idle: false, block: 4 * s.block + mod(t, 4), q: s.q };
   };
 
-  // Symbol j of codeword A (w = 0) or B (w = 1) in codeword pair cw. Pre-FEC
-  // distribution alternates 10-bit symbols between A and B.
-  P.cwSymbol = function (cw, w, j) {
-    if (j >= P.CW_K) return { cw: cw, w: w, j: j, parity: true };
-    var s = P.streamSymbol(cw * 2 * P.CW_K + 2 * j + w);
-    s.cw = cw; s.w = w; s.j = j; s.parity = false;
+  // am_mapped<b>, b = 0..1027 (119.2.4.4.1).
+  function amBit(b) {
+    if (b >= 1025) return { v: 0, src: 'sf', n: b - 1025 };
+    if (b >= 960) return { v: (b * 7 + 3) % 5 < 2 ? 1 : 0, src: 'pad', n: b - 960 };   // stands in for PRBS9
+    var t = Math.floor(b / 10), k = t >> 3, r = t & 7, j = r >> 1, h = r & 1;
+    var x = (k % 2 === 0) === (h === 0) ? 2 * j : 2 * j + 1, n = 10 * k + b % 10;
+    return { v: (P.AM_TABLE[x][n >> 3] >> (n & 7)) & 1, src: 'am', lane: x, n: n };
+  }
+  P.amFieldOf = function (n) { return P.AM_FIELDS[n >> 3]; };
+
+  // Bit b (0..10279) of the 10280-bit block of codeword pair q.
+  function pairBit(q, b) {
+    var am = P.isAmPair(q);
+    if (am && b < P.AM_BITS) return amBit(b);
+    var local = b - (am ? P.AM_BITS : 0), slot = Math.floor(local / 257), o = local - slot * 257;
+    var m = q * P.PAIR_SLOTS - P.AM_SLOTS * amPairsBefore(q) + slot;
+    if (o === 0) return { v: 1, src: 'h', idx: m };
+    var k = 32 * m + ((o - 1) >> 3), bit = (o - 1) & 7;
+    return { v: (P.byteAt(k) >> bit) & 1, src: 'b', idx: k, bit: bit };
+  }
+  P.pairBit = pairBit;
+
+  // 10 bits starting at bit b0, bit 0 first. parts groups runs from one source.
+  function tenBits(q, b0) {
+    var v = 0, parts = [], bits = '';
+    for (var n = 0; n < 10; n++) {
+      var s = pairBit(q, b0 + n), last = parts[parts.length - 1];
+      v |= s.v << n; bits += s.v;
+      var key = s.src === 'b' || s.src === 'h' ? s.src + s.idx : s.src === 'am' ? 'am' + s.lane + ':' + (s.n >> 3) : s.src;
+      if (last && last.key === key) { last.n++; last.bits += s.v; }
+      else parts.push({ key: key, src: s.src, idx: s.idx, lane: s.lane, field: s.src === 'am' ? P.amFieldOf(s.n) : null, n: 1, bits: String(s.v), first: s.bit });
+    }
+    return { value: v, bits: bits, parts: parts };
+  }
+
+  // Codeword symbol i (0 = sent first) of codeword w (0 = A, 1 = B) in pair q.
+  P.cwSymbol = function (q, w, i) {
+    if (i >= P.CW_K) return { q: q, w: w, i: i, parity: true, p: i - P.CW_K };
+    var s = tenBits(q, 20 * i + 10 * w);
+    s.q = q; s.w = w; s.i = i; s.parity = false;
     return s;
   };
 
-  // Data unit n on a PCS lane: every AM_PERIOD-th unit is that lane's alignment
-  // marker, the rest are symbols. Returns -1 for an AM.
-  P.laneDataIndex = function (n) {
-    if (mod(n, P.AM_PERIOD) === 0) return -1;
-    return n - Math.floor(n / P.AM_PERIOD) - 1;
+  // Lane symbol k (0..135) of PCS lane p in pair q -> codeword symbol.
+  P.laneSymbolId = function (p, k) {
+    return { w: (k & 1) ^ (p & 1), i: 4 * k + (p >> 1) };
   };
 
-  // Unit d on PCS lane p is one A+B symbol pair. Symbol distribution deals
-  // pairs round-robin: pair j of the codeword pair goes to lane j mod 8. A_j
-  // and B_j are stream symbols 2j and 2j+1, so a pair is 20 adjacent stream
-  // bits, about 2.5 characters.
-  P.lanePairId = function (p, d) {
-    var cw = Math.floor(d / P.LANE_PAIRS);
-    return { cw: cw, j: (d - cw * P.LANE_PAIRS) * P.N_PCS + p };
-  };
-  P.lanePair = function (p, d) {
-    var id = P.lanePairId(p, d);
-    return { cw: id.cw, j: id.j, parity: id.j >= P.CW_K,
-             a: P.cwSymbol(id.cw, 0, id.j), b: P.cwSymbol(id.cw, 1, id.j) };
-  };
-
-  // Codeword cube n of row w covers symbols CHUNK*c .. CHUNK*c+31 of codeword w in pair cw.
-  P.chunkId = function (n) {
-    var cw = Math.floor(n / P.CHUNKS);
-    return { cw: cw, c: n - cw * P.CHUNKS };
-  };
-
-  // Bytes whose bits fall in stream bits [b0, b0 + n): [{ idx, n }], in order.
-  function coverBits(b0, n, out) {
-    for (var b = b0; b < b0 + n; b++) {
-      var s = streamBit(b);
-      if (s.src !== 'b') continue;
-      var last = out[out.length - 1];
-      if (last && last.idx === s.idx) last.n++;
-      else out.push({ idx: s.idx, n: 1 });
+  // Scene lane cube n on PCS lane p: pair q, cube u in pair, its 4 symbols.
+  P.laneUnit = function (p, n) {
+    var q = Math.floor(n / P.UNITS_PER_PAIR), u = n - q * P.UNITS_PER_PAIR, syms = [];
+    for (var k = P.UNIT_SYM * u; k < P.UNIT_SYM * (u + 1); k++) {
+      var id = P.laneSymbolId(p, k), s = P.cwSymbol(q, id.w, id.i);
+      s.k = k; syms.push(s);
     }
-    return out;
-  }
-  function symBits(cw, w, j) { return (cw * 2 * P.CW_K + 2 * j + w) * 10; }
+    return { p: p, q: q, u: u, am: P.isAmPair(q) && u < P.AM_UNITS, syms: syms };
+  };
+  P.isAmUnit = function (n) {
+    var u = mod(n, P.UNITS_PER_PAIR);
+    return u < P.AM_UNITS && P.isAmPair(Math.floor(n / P.UNITS_PER_PAIR));
+  };
 
-  // Which characters each kind of block carries, as absolute byte indices.
+  // Scene codeword cubes: 15 x 32 data symbols, then 34, then the 30 parity symbols.
+  P.ROW_CUBES = [];
+  (function () {
+    for (var c = 0; c < 15; c++) P.ROW_CUBES.push([32 * c, 32 * c + 32]);
+    P.ROW_CUBES.push([480, 514]);
+    P.ROW_CUBES.push([514, 544]);
+  })();
+  P.ROW_PARITY = P.ROW_CUBES.length - 1;
+
+  // ---- What each block carries, as byte indices: [{ idx, n }] ----
   var memo = new Map(), memoVer = -1;
   function cached(key, fn) {
     if (memoVer !== P.payloadVersion) { memo.clear(); memoVer = P.payloadVersion; }
     var v = memo.get(key);
-    if (!v) { v = fn(); if (memo.size > 6000) memo.clear(); memo.set(key, v); }
+    if (v === undefined) { v = fn(); if (memo.size > 8000) memo.clear(); memo.set(key, v); }
     return v;
+  }
+  function addSym(s, out) {
+    if (s.parity) return out;
+    s.parts.forEach(function (pt) {
+      if (pt.src !== 'b') return;
+      var last = out[out.length - 1];
+      if (last && last.idx === pt.idx) last.n += pt.n;
+      else out.push({ idx: pt.idx, n: pt.n });
+    });
+    return out;
   }
   function whole(start, len) {
     var out = [];
     for (var i = 0; i < len; i++) out.push({ idx: start + i, n: 8 });
     return out;
   }
-  P.coverG66 = function (n) { return whole(8 * n, 8); };
-  P.coverG257 = function (m) { return whole(32 * m, 32); };
-  P.coverChunk = function (cw, w, c) {
-    return cached('c' + cw + ':' + w + ':' + c, function () {
-      var out = [];
-      for (var j = c * P.CHUNK; j < Math.min((c + 1) * P.CHUNK, P.CW_K); j++) coverBits(symBits(cw, w, j), 10, out);
-      return out;
+  P.cover66 = function (t) { var s = P.slot66(t); return s.idle ? null : whole(8 * s.block, 8); };
+  P.cover257 = function (s) { var sl = P.slot257(s); return sl.am ? null : whole(32 * sl.block, 32); };
+  P.coverRow = function (q, w, c) {
+    return cached('r' + q + ':' + w + ':' + c, function () {
+      var out = [], r = P.ROW_CUBES[c];
+      for (var i = r[0]; i < Math.min(r[1], P.CW_K); i++) addSym(P.cwSymbol(q, w, i), out);
+      return out.sort(function (a, b) { return a.idx - b.idx; });
     });
   };
-  P.coverLanePair = function (p, d) {
-    var id = P.lanePairId(p, d);
-    if (id.j >= P.CW_K) return [];
-    return cached('l' + id.cw + ':' + id.j, function () { return coverBits(symBits(id.cw, 0, id.j), 20, []); });
+  P.coverLane = function (p, n) {
+    return cached('l' + p + ':' + n, function () {
+      var out = [];
+      P.laneUnit(p, n).syms.forEach(function (s) { addSym(s, out); });
+      return out.sort(function (a, b) { return a.idx - b.idx; });
+    });
   };
 
-  // The word around byte i, in passage offsets (the passage repeats).
+  // ---- Words ----
   function isWordChar(c) { return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 39; }
   P.passageLength = function () { return bytes.length; };
   P.wordAround = function (i) {
@@ -157,8 +207,7 @@
     return { s: s, e: e, text: String.fromCharCode.apply(null, bytes.slice(s, e)) };
   };
   P.inWord = function (i, w) { var k = mod(i, bytes.length); return k >= w.s && k < w.e; };
-  // Characters of word w present in a cover list, e.g. 'Ish'. '' if none.
-  // The same, as a mask over the word: which letters this block holds bits of.
+  // Which letters of word w a block holds bits of, as a mask; null if none.
   P.wordMask = function (cover, w) {
     var L = bytes.length, has = new Array(w.e - w.s).fill(false), any = false;
     for (var i = 0; i < cover.length; i++) {
@@ -168,12 +217,11 @@
     return any ? has : null;
   };
   P.wordPart = function (cover, w) {
-    var s = '';
-    for (var i = 0; i < cover.length; i++) if (P.inWord(cover[i].idx, w)) s += String.fromCharCode(P.byteAt(cover[i].idx));
+    var m = P.wordMask(cover, w), s = '';
+    if (m) m.forEach(function (on, i) { if (on) s += w.text[i]; });
     return s;
   };
 
   P.hex = function (v, digits) { return v.toString(16).toUpperCase().padStart(digits, '0'); };
-  P.bin = function (v, n) { return v.toString(2).padStart(n, '0'); };
   P.glyph = function (b) { return String.fromCharCode(b); };
 })(globalThis.PCS = globalThis.PCS || {});

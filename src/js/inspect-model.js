@@ -5,115 +5,100 @@
 
   function stageAt(x) {
     var best = null;
-    P.BOXES.forEach(function (b) { if (x >= b.x[0] - 0.75 && x <= b.x[1] + 0.75 && !best) best = b; });
+    P.BOXES.forEach(function (b) { if (!best && x >= b.x[0] - 0.75 && x <= b.x[1] + 0.75) best = b; });
     if (best) return best.name;
     var X = P.X;
     if (x > X.chan[0] && x < X.chan[1]) return 'Physical SerDes lane';
-    if (x > X.lanesStart && x < X.mux[0]) return 'PCS lane, between symbol distribution and the PMA';
+    if (x > X.lanesStart && x < X.mux[0]) return 'PCS lane';
     return 'In transit';
   }
 
-  function chars(bytes) { return bytes.map(P.glyph).join(''); }
-  function hexBytes(bytes) { return bytes.map(function (b) { return P.hex(b, 2); }).join(' '); }
-
-  // Which characters a set of symbols touches, and how many bits of each.
+  // Which characters a set of symbols touches, in text order.
   function sourcesOf(syms) {
-    var map = {}, order = [];
+    var seen = {}, order = [];
     syms.forEach(function (s) {
       if (s.parity) return;
       s.parts.forEach(function (pt) {
-        if (pt.src !== 'b') return;
-        if (!map[pt.idx]) { map[pt.idx] = 0; order.push(pt.idx); }
-        map[pt.idx] += pt.n;
+        if (pt.src === 'b' && !seen[pt.idx]) { seen[pt.idx] = 1; order.push(pt.idx); }
       });
     });
-    order.sort(function (a, b) { return a - b; });
-    return order.map(function (i) { return { idx: i, ch: P.byteAt(i), bits: map[i] }; });
+    return order.sort(function (a, b) { return a - b; });
   }
 
   function symbolInfo(s) {
-    if (s.parity) return { parity: true, cw: s.cw, w: s.w, j: s.j };
-    return {
-      parity: false, cw: s.cw, w: s.w, j: s.j, value: s.value,
-      hex: P.hex(s.value, 3), bin: P.bin(s.value, 10),
-      parts: s.parts.map(function (pt) {
-        return pt.src === 'h'
-          ? { kind: 'hdr', block: pt.idx, bits: pt.bits }
-          : { kind: 'byte', ch: P.byteAt(pt.idx), idx: pt.idx, n: pt.n, hi: pt.hi, lo: pt.lo, bits: pt.bits, whole: pt.n === 8 };
-      })
-    };
+    var out = { w: s.w, i: s.i, k: s.k, parity: !!s.parity };
+    if (s.parity) { out.p = s.p; return out; }
+    out.hex = P.hex(s.value, 3); out.bits = s.bits;
+    out.parts = s.parts.map(function (pt) {
+      if (pt.src === 'b') return { kind: 'byte', idx: pt.idx, ch: P.byteAt(pt.idx), n: pt.n, bits: pt.bits };
+      if (pt.src === 'h') return { kind: 'hdr', block: pt.idx, n: pt.n, bits: pt.bits };
+      if (pt.src === 'am') return { kind: 'am', lane: pt.lane, field: pt.field, n: pt.n, bits: pt.bits };
+      return { kind: pt.src, n: pt.n, bits: pt.bits };
+    });
+    return out;
   }
+  P.symbolInfo = symbolInfo;
 
-  // Characters a drawn block carries (absolute byte indices), or null for blocks without text.
+  // Characters a drawn block carries (byte indices with bit counts), or null.
   P.coverOf = function (m) {
     if (!m) return null;
-    if (m.fam === 'g66') return P.coverG66(m.n);
-    if (m.fam === 'g257') return P.coverG257(m.n);
-    if (m.fam === 'row') {
-      if (m.n < 0) return null;
-      var id = P.chunkId(m.n);
-      return P.coverChunk(id.cw, m.row, id.c);
-    }
-    if (m.fam === 'lane') {
-      var d = P.laneDataIndex(m.n);
-      return d < 0 ? null : P.coverLanePair(m.p, d);
-    }
+    if (m.fam === 'b66') return P.cover66(m.t);
+    if (m.fam === 'b257') return P.cover257(m.s);
+    if (m.fam === 'row') return m.c === P.ROW_PARITY ? null : P.coverRow(m.q, m.w, m.c);
+    if (m.fam === 'lane') return P.coverLane(m.p, m.n);
     return null;
   };
 
   P.describePacket = function (m) {
     if (!m) return null;
-    var S = P.state, where = stageAt(m.x), seg = m.seg != null ? P.SEGS[m.seg] : null;
+    var S = P.state;
     var side = m.x < P.X.muxIn ? 'TX' : m.x > P.X.demux[0] ? 'RX' : 'Channel';
-    var out = { where: where, side: side, state: m.state };
+    var out = { where: stageAt(m.x), side: side, state: m.state };
 
-    if (m.fam === 'g66') {
-      var b = P.block66(m.n);
-      out.kind = seg.kind === 'mii' ? 'mii' : 'b66';
-      out.title = seg.kind === 'mii' ? '200GMII transfer ' + m.n : '66-bit block ' + m.n;
-      out.bytes = b.bytes; out.ascii = chars(b.bytes); out.hex = hexBytes(b.bytes);
-      out.hdr = b.hdr; out.readable = true; out.start = 8 * m.n; out.cover = P.coverG66(m.n);
+    if (m.fam === 'b66') {
+      var sl = P.slot66(m.t);
+      if (sl.idle) {
+        out.kind = 'idle'; out.title = 'Idle';
+        return out;
+      }
+      out.kind = m.seg === 'mii' ? 'mii' : 'b66';
+      out.title = (m.seg === 'mii' ? '200GMII transfer ' : '66-bit block ') + sl.block;
+      out.start = 8 * sl.block; out.cover = P.cover66(m.t);
       return out;
     }
     if (m.fam === 'amg') {
-      out.kind = 'amgroup'; out.title = 'Alignment marker group';
-      out.readable = false;
+      out.kind = 'amgroup'; out.title = 'Alignment marker group, codeword pair ' + m.q;
       return out;
     }
-    if (m.fam === 'g257') {
-      var blk = P.block257(m.n);
-      out.kind = 'b257'; out.title = '257-bit block ' + m.n;
-      out.bytes = blk.bytes; out.ascii = chars(blk.bytes); out.hex = hexBytes(blk.bytes);
-      out.hdr = blk.hdr; out.from66 = [blk.first66, blk.first66 + 3]; out.start = 32 * m.n; out.cover = P.coverG257(m.n);
-      out.scrambled = !!seg.scr; out.readable = true;
+    if (m.fam === 'b257') {
+      var s = P.slot257(m.s);
+      out.kind = 'b257'; out.title = '257-bit block ' + s.block;
+      out.start = 32 * s.block; out.cover = P.cover257(m.s);
+      out.scrambled = !!m.scr; out.from66 = [4 * s.block, 4 * s.block + 3];
+      out.pair = s.q; out.slot = s.r;
       return out;
     }
     if (m.fam === 'row') {
-      var id = P.chunkId(m.n), w = m.row, j0 = id.c * P.CHUNK, syms = [];
-      for (var j = j0; j < Math.min(j0 + P.CHUNK, P.CW_N); j++) syms.push(P.cwSymbol(id.cw, w, j));
-      out.kind = 'cw'; out.readable = false;
-      out.title = 'Codeword ' + (w ? 'B' : 'A') + ', pair ' + id.cw + ', symbols ' + j0 + '–' + (j0 + syms.length - 1);
-      out.cw = id.cw; out.w = w; out.j0 = j0;
-      out.symbols = syms.map(symbolInfo);
-      out.parityCount = syms.filter(function (s) { return s.parity; }).length;
-      out.sources = sourcesOf(syms);
-      out.cover = P.coverChunk(id.cw, w, id.c);
+      var r = P.ROW_CUBES[m.c], syms = [];
+      for (var i = r[0]; i < r[1]; i++) syms.push(symbolInfo(P.cwSymbol(m.q, m.w, i)));
+      out.kind = 'cw'; out.q = m.q; out.w = m.w; out.r = r;
+      out.title = 'Codeword ' + (m.w ? 'B' : 'A') + ', pair ' + m.q + ', symbols ' + r[0] + '–' + (r[1] - 1);
+      out.symbols = syms;
+      out.parityCount = syms.filter(function (x) { return x.parity; }).length;
+      out.amCount = syms.filter(function (x) { return !x.parity && x.parts.some(function (pt) { return pt.kind === 'am'; }); }).length;
+      out.sources = sourcesOf(syms.map(function (x, n) { return x.parity ? { parity: true } : P.cwSymbol(m.q, m.w, r[0] + n); }));
+      out.cover = P.coverOf(m);
       return out;
     }
     if (m.fam === 'lane') {
-      var lane = S.link.lanes[m.p], d = P.laneDataIndex(m.n);
-      out.lane = { pcs: m.p, serdes: lane.serdes, slot: lane.slot, k: S.link.k, rxPma: lane.rxPma, rxSerdes: lane.rxSerdes };
-      if (d < 0) {
-        out.kind = 'am'; out.title = 'Alignment marker, PCS lane ' + m.p; out.readable = false;
-        return out;
-      }
-      var pr = P.lanePair(m.p, d);
-      out.kind = 'pair'; out.readable = false;
-      out.title = 'PCS lane ' + m.p + ', unit ' + d;
-      out.pair = { cw: pr.cw, j: pr.j, parity: pr.parity, a: symbolInfo(pr.a), b: symbolInfo(pr.b) };
-      out.cover = P.coverLanePair(m.p, d);
+      var u = P.laneUnit(m.p, m.n), lane = S.link.lanes[m.p];
+      out.kind = 'lane'; out.am = u.am; out.q = u.q; out.u = u.u;
+      out.title = 'PCS lane ' + m.p + ', symbols ' + (P.UNIT_SYM * u.u) + '–' + (P.UNIT_SYM * u.u + P.UNIT_SYM - 1) + ' of pair ' + u.q;
+      out.symbols = u.syms.map(symbolInfo);
+      out.cover = P.coverLane(m.p, m.n);
+      out.lane = { pcs: m.p, serdes: lane.serdes, slot: lane.slot, k: S.link.k, rxPma: lane.rxPma };
       return out;
     }
-    return null;
+    return out;
   };
 })(globalThis.PCS = globalThis.PCS || {});

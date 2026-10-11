@@ -38,6 +38,7 @@
       if (S.u >= S.stepTo) S.stepTo = null;
     }
     P.processAms();
+    P.lensTick(dt);           // the lens sits below the viewport, so it runs even when the scene is offscreen
     diagAcc += dt;
     if (diagAcc > 0.12) { diagAcc = 0; P.renderDiag(); }
     if (!visible || document.hidden) return;
@@ -54,7 +55,7 @@
 
   function themeChanged() {
     requestAnimationFrame(function () {
-      P.readTheme(); P.recolorStatic(); P.drawScope(); P.inspectorRecolor && P.inspectorRecolor();
+      P.readTheme(); P.recolorStatic(); P.drawScope(); P.lensRecolor();
     });
   }
 
@@ -64,6 +65,7 @@
     P.initDiag();
     P.initScope();
     P.initStory();
+    P.initLens();
     P.on(onEvent);
     try {
       P.initScene(vp);
