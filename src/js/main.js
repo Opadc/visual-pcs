@@ -15,6 +15,8 @@
       P.styleLinkScene(); P.buildLabels(); P.renderMapping(); P.syncToolbar(); P.renderDiag();
     } else if (what === 'select') {
       P.styleLinkScene(); P.buildLabels(); P.renderMapping(); P.syncToolbar(); P.renderDiag();
+    } else if (what === 'message') {
+      // Message changed; redraw packets on next frame
     } else if (what === 'fault') {
       P.styleLinkScene(); P.renderDiag();
     } else if (what === 'stage') {

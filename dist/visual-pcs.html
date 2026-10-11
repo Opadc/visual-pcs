@@ -1447,7 +1447,17 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   var MAX = 1400;
   var m4 = new T.Matrix4(), q = new T.Quaternion(), v = new T.Vector3(), sc = new T.Vector3();
   var c = new T.Color(), tmp = new T.Color();
-  var count = 0;
+  var count = 0, msgBuf = P.messageBytes(256);
+
+  // Stages where message is readable as ASCII (before/after FEC)
+  var ASCII_TX_END = P.X.mux[0];           // through pre-FEC distributor
+  var ASCII_RX_START = P.X.reorder[1];     // after post-FEC interleave
+
+  function msgCharAt(u, slot) {
+    // Approximate which message byte is at this position
+    var byteIdx = Math.floor((u - P.X.lanesStart) / P.GAP) % msgBuf.length;
+    return String.fromCharCode(msgBuf[byteIdx] || 32); // space if undefined
+  }
 
   P.initPackets = function () {
     var geo = new T.BoxGeometry(1, 1, 1);
@@ -1485,17 +1495,20 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       var noisy = f.noise > 0 && (f.noiseLane < 0 || f.noiseLane === lane.serdes);
       var dead = f.los && f.losLane === lane.serdes;
       var amBad = f.amLoss && f.amLane === p;
+      var showAscii = S.u < ASCII_TX_END || S.u > ASCII_RX_START;
       for (var n = Math.max(nLo, 0); n <= nHi; n++) {
         var u = X.lanesStart + S.u - n * P.GAP;
         var x = P.warp(u, segs);
         if (x < X.lanesStart || x > X.lanesEnd) continue;
-        var dx = P.warp(u + 0.05, segs) - x;            // local compression from mux/skew/deskew
+        var dx = P.warp(u + 0.05, segs) - x;
         var comp = Math.min(Math.max(dx / 0.05, 0.12), 1);
         var y = P.yPath(link, lane, x), z = P.zPath(link, lane, x);
         var isAm = n % P.AM_PERIOD === 0;
         c.copy(G.col.lanes[p]);
         var len = 0.62 * comp, h = 0.42, d = 0.42;
-        if (isAm) { c.lerp(G.col.paper, 0.45); len = Math.max(0.18, 0.26 * comp); h = 1.05; d = 0.9; }
+        var label = '';
+        if (isAm) { c.lerp(G.col.paper, 0.45); len = Math.max(0.18, 0.26 * comp); h = 1.05; d = 0.9; label = 'AM'; }
+        else if (showAscii) label = msgCharAt(u, p);
         if (dead && x > X.noiseAt && x < X.amLock + 0.5) {
           c.copy(G.col.muted); y += (P.hash(n, p) - 0.5) * 0.5; h *= 0.6;
         } else if (amBad && isAm && x > X.mux[0]) {
@@ -1556,6 +1569,16 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
         }
       });
     });
+  }
+
+  // Stages where message is readable as ASCII (before/after FEC)
+  var ASCII_TX_END = P.X.mux[0];           // through pre-FEC distributor
+  var ASCII_RX_START = P.X.reorder[1];     // after post-FEC interleave
+
+  function msgCharAt(u, slot) {
+    // Approximate which message byte is at this position
+    var byteIdx = Math.floor((u - P.X.lanesStart) / P.GAP) % msgBuf.length;
+    return String.fromCharCode(msgBuf[byteIdx] || 32); // space if undefined
   }
 
   P.drawPackets = function () {
@@ -2316,6 +2339,8 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       P.styleLinkScene(); P.buildLabels(); P.renderMapping(); P.syncToolbar(); P.renderDiag();
     } else if (what === 'select') {
       P.styleLinkScene(); P.buildLabels(); P.renderMapping(); P.syncToolbar(); P.renderDiag();
+    } else if (what === 'message') {
+      // Message changed; redraw packets on next frame
     } else if (what === 'fault') {
       P.styleLinkScene(); P.renderDiag();
     } else if (what === 'stage') {
