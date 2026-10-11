@@ -6,9 +6,6 @@
 
   <div class="toolbar" role="toolbar" aria-label="Lane lab controls">
     <div class="tgroup" aria-label="Playback">
-      <label class="field"><span>Message</span>
-        <input type="text" id="msg-input" placeholder="Call me Ishmael" value="Call me Ishmael" maxlength="32" aria-label="Message to track through the pipeline">
-      </label>
       <button type="button" id="btn-play" class="btn primary" aria-pressed="true" title="Pause or resume (P)">Pause</button>
       <button type="button" id="btn-step" class="btn" title="Advance one data unit (.)">Step</button>
       <label class="field"><span>Speed</span>
@@ -31,6 +28,11 @@
         <button type="button" role="radio" class="segbtn" data-preset="remapped" id="mr">Remapped</button>
       </div>
     </div>
+    <div class="tgroup" aria-label="Payload">
+      <label class="field" for="msg-input"><span>MAC sends</span></label>
+      <input type="text" id="msg-input" maxlength="200" spellcheck="false" aria-describedby="msg-help">
+      <span class="sr" id="msg-help">Printable ASCII text the MAC transmits, repeated. Leave empty for the default passage.</span>
+    </div>
     <div class="tgroup" aria-label="View">
       <button type="button" id="btn-overview" class="btn" title="Show the whole link">Whole link</button>
       <button type="button" id="btn-explore" class="btn" aria-pressed="false" title="Let drag and pinch move the 3D camera">Drag to explore</button>
@@ -48,7 +50,7 @@
     <button type="button" class="chip l5" data-lane="5" aria-pressed="false"><i></i>5</button>
     <button type="button" class="chip l6" data-lane="6" aria-pressed="false"><i></i>6</button>
     <button type="button" class="chip l7" data-lane="7" aria-pressed="false"><i></i>7</button>
-    <span class="keys" aria-hidden="true">Keys: P pause · . step · 0–7 lane · Esc all</span>
+    <span class="keys" aria-hidden="true">Keys: P pause · . step · 0–7 lane · Enter inspect · Esc close</span>
   </div>
 
   <div class="viewport" id="viewport">
@@ -60,6 +62,7 @@
       <span><i class="lg-bad"></i>error</span>
     </div>
     <p id="lab-hint" class="lab-hint" hidden></p>
+    <p class="vp-click" id="vp-click">Click any block to see what it carries</p>
     <p class="vp-help" id="vp-help">Drag to pan · right-drag to rotate · Ctrl + scroll to zoom</p>
     <noscript><p class="noscript">The lane lab needs JavaScript and WebGL.</p></noscript>
   </div>
@@ -69,11 +72,6 @@
   <article class="stage-detail" id="stage-detail" aria-live="polite"></article>
 
   <div class="panels">
-    <section class="panel" aria-labelledby="msg-title">
-      <header><h3 id="msg-title">Message tracker</h3><span class="tag std">TX/RX path</span></header>
-      <div id="msg-detail"></div>
-    </section>
-
     <section class="panel" aria-labelledby="map-title">
       <header><h3 id="map-title">PCS-to-SerDes mapping</h3><span class="tag std">Standard concept</span></header>
       <div class="order" id="order-strip"></div>

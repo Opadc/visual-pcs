@@ -1,29 +1,13 @@
-/* Moving data: one InstancedMesh for every cube in the scene, rebuilt each frame. */
+/* Moving data: one InstancedMesh for every cube in the scene, rebuilt each frame.
+   Each instance also gets an identity record so a click can say what it carries. */
 (function (P) {
   'use strict';
   var T = window.THREE, G = P.g;
   var MAX = 1400;
   var m4 = new T.Matrix4(), q = new T.Quaternion(), v = new T.Vector3(), sc = new T.Vector3();
   var c = new T.Color(), tmp = new T.Color();
-  var count = 0, msgBuf = P.messageBytes(256);
-
-  // Stages where message is readable as ASCII (before/after FEC)
-  var ASCII_TX_END = P.X.mux[0];           // through pre-FEC distributor
-  var ASCII_RX_START = P.X.reorder[1];     // after post-FEC interleave
-  var HEX_TX_START = 24.5;                 // pre-FEC distribution begins
-  var HEX_RX_END = 83.5;                   // post-FEC interleave ends
-
-  function msgCharAt(u, slot) {
-    // Approximate which message byte is at this position
-    var byteIdx = Math.floor((u - P.X.lanesStart) / P.GAP) % msgBuf.length;
-    return String.fromCharCode(msgBuf[byteIdx] || 32); // space if undefined
-  }
-
-  function symHexAt(u) {
-    // 10-bit symbol as hex, for abstract representation in FEC zone
-    var idx = Math.floor((u - HEX_TX_START) * 10 / P.GAP) % 1024;
-    return (idx & 0x3FF).toString(16).toUpperCase().padStart(3, '0');
-  }
+  var count = 0;
+  var meta = new Array(MAX), boxes = new Float32Array(MAX * 6);
 
   P.initPackets = function () {
     var geo = new T.BoxGeometry(1, 1, 1);
@@ -35,12 +19,15 @@
     G.scene.add(G.inst);
   };
 
-  function put(x, y, z, sx, sy, sz, col) {
+  function put(x, y, z, sx, sy, sz, col, id) {
     if (count >= MAX) return;
     v.set(x, y, z); sc.set(sx, sy, sz);
     m4.compose(v, q, sc);
     G.inst.setMatrixAt(count, m4);
     G.inst.setColorAt(count, col);
+    meta[count] = id;
+    var o = count * 6;
+    boxes[o] = x; boxes[o + 1] = y; boxes[o + 2] = z; boxes[o + 3] = sx; boxes[o + 4] = sy; boxes[o + 5] = sz;
     count++;
   }
 
@@ -61,36 +48,35 @@
       var noisy = f.noise > 0 && (f.noiseLane < 0 || f.noiseLane === lane.serdes);
       var dead = f.los && f.losLane === lane.serdes;
       var amBad = f.amLoss && f.amLane === p;
-      var showAscii = (S.u < HEX_TX_START || S.u > HEX_RX_END) && (x < HEX_TX_START || x > HEX_RX_END);
-      var showHex = S.u >= HEX_TX_START && S.u <= HEX_RX_END && x >= HEX_TX_START && x <= HEX_RX_END;
       for (var n = Math.max(nLo, 0); n <= nHi; n++) {
         var u = X.lanesStart + S.u - n * P.GAP;
         var x = P.warp(u, segs);
         if (x < X.lanesStart || x > X.lanesEnd) continue;
-        var dx = P.warp(u + 0.05, segs) - x;
+        var dx = P.warp(u + 0.05, segs) - x;            // local compression from mux/skew/deskew
         var comp = Math.min(Math.max(dx / 0.05, 0.12), 1);
         var y = P.yPath(link, lane, x), z = P.zPath(link, lane, x);
         var isAm = n % P.AM_PERIOD === 0;
+        var state = '';
         c.copy(G.col.lanes[p]);
         var len = 0.62 * comp, h = 0.42, d = 0.42;
-        var label = '';
-        if (isAm) { c.lerp(G.col.paper, 0.45); len = Math.max(0.18, 0.26 * comp); h = 1.05; d = 0.9; label = 'AM'; }
-        else if (showAscii) label = msgCharAt(u, p);
-        else if (showHex) { c.lerp(G.col.paper, 0.3); label = symHexAt(u); }
+        if (isAm) { c.lerp(G.col.paper, 0.45); len = Math.max(0.18, 0.26 * comp); h = 1.05; d = 0.9; }
         if (dead && x > X.noiseAt && x < X.amLock + 0.5) {
-          c.copy(G.col.muted); y += (P.hash(n, p) - 0.5) * 0.5; h *= 0.6;
+          c.copy(G.col.muted); y += (P.hash(n, p) - 0.5) * 0.5; h *= 0.6; state = 'los';
         } else if (amBad && isAm && x > X.mux[0]) {
-          c.copy(G.col.bad); h = 0.75;
+          c.copy(G.col.bad); h = 0.75; state = 'ambad';
         } else if (noisy && !isAm && x > X.noiseAt && x < X.lanesEnd && P.hash(n, p * 7 + 3) < pVis) {
-          c.copy(G.col.bad); h = 0.55; d = 0.55;
+          c.copy(G.col.bad); h = 0.55; d = 0.55; state = 'err';
         }
         if (!S.align && x > X.deskew[1]) c.lerp(G.col.paper, 0.6);
-        put(x, y, z, len, h, d, dim(c, on));
+        put(x, y, z, len, h, d, dim(c, on), { fam: 'lane', p: p, n: n, x: x, state: state });
       }
     });
   }
 
   // Aggregate (single-stream) segments before distribution and after reorder.
+  // Cubes in the same family share an index, so a cube keeps its identity
+  // when it moves from one segment into the next (200GMII transfer n becomes
+  // 66-bit block n).
   var SEGS = [
     { x: [0, 7.5], kind: 'mii', side: 'tx' },
     { x: [7.5, 12.5], kind: 'b66', side: 'tx' },
@@ -105,10 +91,17 @@
   ];
   var GAPS = { mii: 0.75, b66: 0.75, b257: 3.0, row: 1.25 };
   var SIZE = { mii: [0.42, 0.42, 0.42], b66: [0.62, 0.62, 1.1], b257: [2.4, 0.95, 1.2], row: [1.0, 0.36, 0.7] };
+  var FAM = { mii: 'g66', b66: 'g66', b257: 'g257', row: 'row' };
+  P.SEGS = SEGS;
+
+  function mod(a, n) { return ((a % n) + n) % n; }
+  P.isAggAm = function (sg, n, pos) {
+    return (sg.am === 'in' && mod(n, 5) === 0 && pos > 21.5) || (sg.am === 'out' && mod(n, 5) === 0 && pos < 95.5);
+  };
 
   function drawAggregate() {
     var S = P.state, last = S.lastTick, uncFrac = last && last.codewords ? last.uncorrectable / last.codewords : 0;
-    SEGS.forEach(function (sg) {
+    SEGS.forEach(function (sg, si) {
       var gap = GAPS[sg.kind], sz = SIZE[sg.kind];
       var rows = sg.kind === 'row' ? [0, 1] : [null];
       rows.forEach(function (row) {
@@ -118,35 +111,27 @@
           var pos = S.u - off - n * gap;               // every cube moves at the same speed
           if (pos < sg.x[0] || pos > sg.x[1]) continue;
           var y = row === null ? 0 : (row === 0 ? 0.42 : -0.42), sx = sz[0], sy = sz[1], sz2 = sz[2];
-          var col = c;
+          var col = c, state = '';
+          var parity = sg.kind === 'row' && P.chunkId(mod(n, 1e9)).c === P.CHUNKS - 1;
           if (sg.kind === 'mii') col.copy(G.col.muted);
           else if (sg.kind === 'row') col.copy(row === 0 ? G.col.cwA : G.col.cwB);
           else col.copy(sg.scr ? G.col.edge : G.col.ink);
-          if (sg.kind === 'row' && ((n % 18) + 18) % 18 >= 16 && sg.side === 'tx' && pos > 28.75) col.lerp(G.col.ink, 0.5);
-          var isAm = (sg.am === 'in' && ((n % 5) + 5) % 5 === 0 && pos > 21.5) || (sg.am === 'out' && ((n % 5) + 5) % 5 === 0 && pos < 95.5);
-          if (isAm) { col.copy(G.col.am); sy = 1.6; sx = 1.0; }
+          if (parity && (sg.side === 'tx' ? pos > 28.75 : pos < 88)) col.lerp(G.col.ink, 0.5);
+          var isAm = P.isAggAm(sg, n, pos);
           if (sg.side === 'rx' && !S.align) {
             if (sg.kind !== 'mii') continue;
-            col.copy(G.col.bad); sy *= 0.7;
+            col.copy(G.col.bad); sy *= 0.7; state = 'lf';
           } else if (sg.side === 'rx' && uncFrac > 0 && !isAm && pos > 91 && P.hash(n, 911) < Math.min(0.6, uncFrac * 40)) {
-            col.copy(G.col.bad);
-          } else if (sg.kind === 'mii' && sg.side === 'tx' && P.hash(n, 5) < 0.12) {
-            col.lerp(G.col.paper, 0.6);                      // idle between frames
+            col.copy(G.col.bad); state = 'unc';
           }
-          put(pos, y, 0, sx, sy, sz2, dim(col, P.state.selected < 0, 0.45));
+          put(pos, y, 0, sx, sy, sz2, dim(col, P.state.selected < 0, 0.45),
+            { fam: FAM[sg.kind], seg: si, n: n, row: row, x: pos, state: state });
+          // AM groups are inserted between 257-bit blocks; they do not replace one.
+          if (isAm) put(pos + gap / 2, y, 0, 0.32, 1.6, sz2, dim(c.copy(G.col.am), P.state.selected < 0, 0.45),
+            { fam: 'amg', seg: si, n: n, x: pos + gap / 2, state: '' });
         }
       });
     });
-  }
-
-  // Stages where message is readable as ASCII (before/after FEC)
-  var ASCII_TX_END = P.X.mux[0];           // through pre-FEC distributor
-  var ASCII_RX_START = P.X.reorder[1];     // after post-FEC interleave
-
-  function msgCharAt(u, slot) {
-    // Approximate which message byte is at this position
-    var byteIdx = Math.floor((u - P.X.lanesStart) / P.GAP) % msgBuf.length;
-    return String.fromCharCode(msgBuf[byteIdx] || 32); // space if undefined
   }
 
   P.drawPackets = function () {
@@ -156,6 +141,19 @@
     G.inst.count = count;
     G.inst.instanceMatrix.needsUpdate = true;
     if (G.inst.instanceColor) G.inst.instanceColor.needsUpdate = true;
+  };
+
+  // Picking support for the inspector.
+  P.packetCount = function () { return count; };
+  P.packetMeta = function (i) { return meta[i]; };
+  P.packetBox = function (i) { var o = i * 6; return boxes.subarray(o, o + 6); };
+  P.findPacket = function (key) {
+    for (var i = 0; i < count; i++) if (P.packetKey(meta[i]) === key) return i;
+    return -1;
+  };
+  P.packetKey = function (m) {
+    if (!m) return '';
+    return m.fam === 'lane' ? 'lane:' + m.p + ':' + m.n : m.fam + ':' + (m.row == null ? '' : m.row) + ':' + m.n;
   };
 
   // RS decode box flashes on corrected / uncorrectable codewords.

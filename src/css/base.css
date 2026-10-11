@@ -5,6 +5,7 @@ body {
   font-optical-sizing: auto; -webkit-font-smoothing: antialiased;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 h1, h2, h3, h4 { font-family: var(--f-display); line-height: 1.12; text-wrap: balance; margin: 0; color: var(--ink); }
 p { margin: 0; }
 a { color: inherit; text-decoration-color: var(--scene-edge); text-underline-offset: 3px; }

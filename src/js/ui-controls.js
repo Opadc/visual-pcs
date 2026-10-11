@@ -99,10 +99,11 @@
 
   P.initControls = function () {
     buildRail();
-    $('msg-input').addEventListener('input', function (e) {
-      S.messageContent = e.target.value || 'Call me Ishmael';
-      P.emit('message');
-    });
+    var mi = $('msg-input');
+    mi.value = P.PAYLOAD_DEFAULT.trim();
+    mi.placeholder = P.PAYLOAD_SOURCE;
+    mi.title = P.PAYLOAD_SOURCE;
+    mi.addEventListener('input', function () { P.setPayload(mi.value ? mi.value + ' ' : ''); });
     $('btn-play').onclick = function () { P.setPlaying(!S.playing); };
     $('btn-step').onclick = P.step;
     $('sel-speed').onchange = function (e) { S.speed = +e.target.value; };
@@ -126,14 +127,15 @@
 
     var vp = $('viewport');
     vp.tabIndex = 0;
-    vp.setAttribute('aria-label', '3D lane diagram. Arrow keys pan, plus and minus zoom.');
+    vp.setAttribute('aria-label', '3D lane diagram. Arrow keys pan, plus and minus zoom, Enter inspects the block nearest the centre.');
     vp.addEventListener('keydown', function (e) {
       var c = P.g.controls, cam = P.g.camera;
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         var dx = e.key === 'ArrowLeft' ? -3 : 3; c.target.x += dx; cam.position.x += dx; e.preventDefault();
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         var dy = e.key === 'ArrowUp' ? 1 : -1; c.target.y += dy; cam.position.y += dy; e.preventDefault();
-      } else if (e.key === '+' || e.key === '=') { P.dolly(0.85); e.preventDefault(); }
+      } else if (e.key === 'Enter' && e.target === vp) { P.inspectCenter(); e.preventDefault(); }
+      else if (e.key === '+' || e.key === '=') { P.dolly(0.85); e.preventDefault(); }
       else if (e.key === '-' || e.key === '_') { P.dolly(1.18); e.preventDefault(); }
     });
 
@@ -144,6 +146,7 @@
       if (e.key === 'p' || e.key === 'P') { P.setPlaying(!S.playing); }
       else if (e.key === '.') { P.step(); }
       else if (/^[0-7]$/.test(e.key)) { P.selectLane(+e.key); }
+      else if (e.key === 'Escape' && P.inspectorOpen && P.inspectorOpen()) { P.closeInspector(); }
       else if (e.key === 'Escape' && S.selected >= 0) { S.selected = -1; P.emit('select'); }
       else return;
       e.preventDefault();

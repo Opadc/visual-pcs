@@ -76,6 +76,7 @@ body {
   font-optical-sizing: auto; -webkit-font-smoothing: antialiased;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 h1, h2, h3, h4 { font-family: var(--f-display); line-height: 1.12; text-wrap: balance; margin: 0; color: var(--ink); }
 p { margin: 0; }
 a { color: inherit; text-decoration-color: var(--scene-edge); text-underline-offset: 3px; }
@@ -142,7 +143,7 @@ select { padding-right: 6px; }
 input[type="text"] {
   font-family: var(--f-mono); font-size: var(--s-0); color: var(--ink);
   background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius);
-  padding: 6px 8px; min-width: 160px;
+  padding: 6px 8px; min-height: 34px; width: clamp(12rem, 24vw, 22rem); max-width: 100%;
 }
 input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }
 .btn:hover, .segbtn:hover, .chip:hover, select:hover { border-color: var(--scene-edge); }
@@ -237,6 +238,56 @@ input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offs
   .toolbar { gap: 10px 14px; }
 }
 
+.vp-click {
+  position: absolute; left: 10px; bottom: 10px; z-index: 3; font-family: var(--f-display); font-size: 0.74rem; font-weight: 600; color: var(--ink);
+  background: color-mix(in srgb, var(--scene-bg) 86%, transparent); padding: 3px 7px; border-radius: 3px; pointer-events: none;
+}
+.inspector {
+  position: absolute; left: 0; top: 0; z-index: 5; width: min(23rem, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--ink); border-radius: var(--radius);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--ink) 18%, transparent);
+  font-family: var(--f-display); font-size: var(--s-0); display: grid;
+}
+.inspector.docked { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 62%; transform: none; }
+.ins-head { display: flex; justify-content: space-between; gap: 8px; align-items: start; padding: 9px 10px 7px 12px; border-bottom: 1px solid var(--rule-2); }
+.ins-head h4 { font-size: 0.95rem; font-stretch: 92%; }
+.ins-side { font-family: var(--f-mono); font-size: 0.64rem; letter-spacing: 0.04em; color: var(--muted); display: block; margin-bottom: 2px; }
+.ins-x { border: 0; background: none; font-size: 1.3rem; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 4px; min-width: 32px; min-height: 32px; }
+.ins-x:hover { color: var(--ink); }
+.ins-body { padding: 9px 12px; display: grid; gap: 8px; }
+.ins-ascii { font-family: var(--f-mono); font-size: 1.05rem; font-weight: 600; letter-spacing: 0.04em; word-break: break-all; }
+.ins-note, .ins-src, .ins-path { font-size: 0.8rem; line-height: 1.45; color: var(--ink-2); }
+.ins-src code { font-family: var(--f-mono); background: var(--rule-2); padding: 0 4px; border-radius: 2px; white-space: pre-wrap; }
+.ins-path { font-family: var(--f-mono); font-size: 0.72rem; }
+.ins-warn { font-size: 0.8rem; font-weight: 600; color: var(--bad); border-left: 3px solid var(--bad); padding-left: 8px; }
+.cells { display: flex; flex-wrap: wrap; gap: 3px; }
+.cells .grp { display: inline-flex; gap: 3px; padding-right: 5px; border-right: 1px dashed var(--rule); }
+.cells .grp:last-child { border-right: 0; }
+.cell { display: inline-grid; justify-items: center; min-width: 1.75rem; padding: 2px 3px; border-radius: 2px; background: var(--rule-2); font-family: var(--f-mono); }
+.cell b { font-size: 0.86rem; font-weight: 600; line-height: 1.2; }
+.cell i { font-style: normal; font-size: 0.62rem; color: var(--muted); }
+.cell.sp b { color: var(--muted); }
+.cell.hdr { background: var(--ink); }
+.cell.hdr b, .cell.hdr i { color: var(--paper); }
+.cell.scr { background: color-mix(in srgb, var(--scene-edge) 26%, var(--panel)); }
+.syms { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
+.sym { font-family: var(--f-mono); font-size: 0.7rem; font-weight: 600; padding: 3px 0; border-radius: 2px; border: 1px solid transparent; cursor: pointer;
+  background: color-mix(in srgb, var(--cw-a) 22%, var(--panel)); color: var(--ink); }
+.sym.par { background: color-mix(in srgb, var(--ink) 70%, var(--panel)); color: var(--paper); }
+.sym.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.ins-sym { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.symhex { font-family: var(--f-mono); font-size: 1.05rem; font-weight: 700; }
+.symbin { font-family: var(--f-mono); font-size: 0.95rem; letter-spacing: 0.06em; }
+.sb { padding: 0 1px; border-bottom: 3px solid; }
+.c0 { border-color: var(--lane-1); } .c1 { border-color: var(--lane-0); } .c2 { border-color: var(--lane-2); }
+.ins-src .c0, .ins-src .c1, .ins-src .c2 { border-bottom: 2px solid; }
+.ins-foot { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 12px 10px; border-top: 1px solid var(--rule-2); }
+.ins-foot .btn { min-height: 30px; padding: 2px 9px; font-size: 0.78rem; }
+@media (max-width: 560px) { .vp-click { bottom: 34px; } }
+.ins-ctx { font-size: 0.78rem; color: var(--muted); }
+.ins-ctx code { font-family: var(--f-mono); font-size: 0.86rem; color: var(--ink-2); letter-spacing: 0.03em; }
+.ins-ctx mark { background: none; color: var(--ink); font-weight: 700; border-bottom: 3px solid; }
+
 .panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 18px; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px 16px; min-width: 0; display: grid; gap: 12px; align-content: start; }
 .panel header { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 12px; flex-wrap: wrap; border-bottom: 1px solid var(--rule-2); padding-bottom: 8px; }
@@ -329,19 +380,6 @@ details[open] .dname::before { content: "–"; }
   .orow { grid-template-columns: 1fr; gap: 4px; }
 }
 
-.msg-zones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
-.msg-zone { padding: 8px; border-radius: 3px; background: var(--rule-2); border: 1px solid var(--rule); font-size: 0.8rem; display: grid; gap: 2px; }
-.msg-zone.active { background: color-mix(in srgb, var(--ink) 8%, transparent); border-color: var(--ink); }
-.msg-zone .name { font-weight: 600; color: var(--ink); }
-.msg-zone .type { font-family: var(--f-mono); font-size: 0.7rem; color: var(--muted); }
-
-.msg-lanes { display: grid; gap: 4px; margin-bottom: 8px; }
-.mlabel { font-family: var(--f-display); font-size: var(--s-1); font-weight: 600; }
-.msg-lanes .mlane { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: center; font-family: var(--f-mono); font-size: 0.75rem; }
-.msg-lanes small { color: var(--muted); }
-.msg-lanes code { background: var(--rule-2); padding: 2px 5px; border-radius: 2px; word-break: break-all; color: var(--ink); }
-
-.msg-note { font-size: 0.8rem; color: var(--ink-2); line-height: 1.45; }
 
 .story { padding-inline: var(--gutter); padding-block: 24px 64px; display: grid; gap: 56px; max-width: 1160px; margin: 0 auto; }
 .story section { display: grid; grid-template-columns: minmax(0, 68ch) minmax(0, 1fr); gap: 16px 40px; align-items: start; }
@@ -443,9 +481,6 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 
   <div class="toolbar" role="toolbar" aria-label="Lane lab controls">
     <div class="tgroup" aria-label="Playback">
-      <label class="field"><span>Message</span>
-        <input type="text" id="msg-input" placeholder="Call me Ishmael" value="Call me Ishmael" maxlength="32" aria-label="Message to track through the pipeline">
-      </label>
       <button type="button" id="btn-play" class="btn primary" aria-pressed="true" title="Pause or resume (P)">Pause</button>
       <button type="button" id="btn-step" class="btn" title="Advance one data unit (.)">Step</button>
       <label class="field"><span>Speed</span>
@@ -468,6 +503,11 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
         <button type="button" role="radio" class="segbtn" data-preset="remapped" id="mr">Remapped</button>
       </div>
     </div>
+    <div class="tgroup" aria-label="Payload">
+      <label class="field" for="msg-input"><span>MAC sends</span></label>
+      <input type="text" id="msg-input" maxlength="200" spellcheck="false" aria-describedby="msg-help">
+      <span class="sr" id="msg-help">Printable ASCII text the MAC transmits, repeated. Leave empty for the default passage.</span>
+    </div>
     <div class="tgroup" aria-label="View">
       <button type="button" id="btn-overview" class="btn" title="Show the whole link">Whole link</button>
       <button type="button" id="btn-explore" class="btn" aria-pressed="false" title="Let drag and pinch move the 3D camera">Drag to explore</button>
@@ -485,7 +525,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     <button type="button" class="chip l5" data-lane="5" aria-pressed="false"><i></i>5</button>
     <button type="button" class="chip l6" data-lane="6" aria-pressed="false"><i></i>6</button>
     <button type="button" class="chip l7" data-lane="7" aria-pressed="false"><i></i>7</button>
-    <span class="keys" aria-hidden="true">Keys: P pause · . step · 0–7 lane · Esc all</span>
+    <span class="keys" aria-hidden="true">Keys: P pause · . step · 0–7 lane · Enter inspect · Esc close</span>
   </div>
 
   <div class="viewport" id="viewport">
@@ -497,6 +537,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       <span><i class="lg-bad"></i>error</span>
     </div>
     <p id="lab-hint" class="lab-hint" hidden></p>
+    <p class="vp-click" id="vp-click">Click any block to see what it carries</p>
     <p class="vp-help" id="vp-help">Drag to pan · right-drag to rotate · Ctrl + scroll to zoom</p>
     <noscript><p class="noscript">The lane lab needs JavaScript and WebGL.</p></noscript>
   </div>
@@ -506,11 +547,6 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   <article class="stage-detail" id="stage-detail" aria-live="polite"></article>
 
   <div class="panels">
-    <section class="panel" aria-labelledby="msg-title">
-      <header><h3 id="msg-title">Message tracker</h3><span class="tag std">TX/RX path</span></header>
-      <div id="msg-detail"></div>
-    </section>
-
     <section class="panel" aria-labelledby="map-title">
       <header><h3 id="map-title">PCS-to-SerDes mapping</h3><span class="tag std">Standard concept</span></header>
       <div class="order" id="order-strip"></div>
@@ -927,6 +963,114 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   };
 })(globalThis.PCS = globalThis.PCS || {});
 
+/* ---- payload.js ---- */
+/* What each block in the scene carries. The MAC sends a repeating ASCII text as
+   plain data bytes (no preamble, FCS, idles or other control characters).
+   64B/66B, 256B/257B and scrambling keep the bytes intact here; scrambling is
+   shown by colour only. From pre-FEC distribution onward the stream is cut into
+   10-bit symbols, so characters are no longer visible until post-FEC interleave.
+   Pure functions, no DOM. */
+(function (P) {
+  'use strict';
+
+  P.PAYLOAD_DEFAULT = 'Call me Ishmael. Some years ago--never mind how long precisely--having little or no ' +
+    'money in my purse, and nothing particular to interest me on shore, I thought I would sail about a ' +
+    'little and see the watery part of the world. ';
+  P.PAYLOAD_SOURCE = 'Herman Melville, Moby-Dick (1851)';
+
+  P.CW_N = 544;                       // RS(544,514) symbols per codeword
+  P.CW_K = 514;                       // data symbols per codeword
+  P.PAIR_BLOCKS = 40;                 // 2 x 514 x 10 bits = 40 x 257-bit blocks
+  P.LANE_SYM_PER_PAIR = 2 * P.CW_N / P.N_PCS;   // 136 symbols per PCS lane per codeword pair
+  P.CHUNK = 32;                       // symbols per codeword cube in the scene
+  P.CHUNKS = Math.ceil(P.CW_N / P.CHUNK);       // 17 cubes per codeword; the last holds the parity
+
+  var bytes = [];
+  P.payloadVersion = 0;
+  P.setPayload = function (text) {
+    P.payloadVersion++;
+    var s = text && text.length ? text : P.PAYLOAD_DEFAULT;
+    bytes = [];
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      bytes.push(c >= 32 && c < 127 ? c : 63);   // printable ASCII only; anything else becomes '?'
+    }
+    return bytes.length;
+  };
+  P.setPayload('');
+
+  function mod(a, n) { return ((a % n) + n) % n; }
+  P.byteAt = function (i) { return bytes[mod(i, bytes.length)]; };
+  P.byteRange = function (start, len) {
+    var out = [];
+    for (var i = 0; i < len; i++) out.push(P.byteAt(start + i));
+    return out;
+  };
+
+  // 200GMII transfer n and 66-bit block n carry the same 8 bytes; 257-bit block m carries 66-bit blocks 4m..4m+3.
+  P.miiBytes = function (n) { return P.byteRange(8 * n, 8); };
+  P.block66 = function (n) { return { hdr: '01', bytes: P.byteRange(8 * n, 8) }; };
+  P.block257 = function (m) { return { hdr: '1', bytes: P.byteRange(32 * m, 32), first66: 4 * m }; };
+
+  // Bit b of the transcoded stream. Each 257-bit block is a 1-bit header (1 = all four
+  // 66-bit blocks are data) followed by 32 bytes, each sent MSB first in this model.
+  function streamBit(b) {
+    var m = Math.floor(b / 257), o = b - m * 257;
+    if (o === 0) return { v: 1, src: 'h', idx: m };
+    var k = 32 * m + ((o - 1) >> 3), bit = 7 - ((o - 1) & 7);
+    return { v: (P.byteAt(k) >> bit) & 1, src: 'b', idx: k, bit: bit };
+  }
+
+  // 10-bit symbol t of the stream, with the bytes (or header bits) its bits came from.
+  P.streamSymbol = function (t) {
+    var v = 0, parts = [];
+    for (var i = 0; i < 10; i++) {
+      var s = streamBit(10 * t + i), last = parts[parts.length - 1];
+      v = (v << 1) | s.v;
+      if (last && last.src === s.src && last.idx === s.idx) { last.n++; last.lo = s.bit; last.bits += s.v; }
+      else parts.push({ src: s.src, idx: s.idx, n: 1, hi: s.bit, lo: s.bit, bits: String(s.v) });
+    }
+    return { value: v, parts: parts };
+  };
+
+  // Symbol j of codeword A (w = 0) or B (w = 1) in codeword pair cw. Pre-FEC
+  // distribution alternates 10-bit symbols between A and B.
+  P.cwSymbol = function (cw, w, j) {
+    if (j >= P.CW_K) return { cw: cw, w: w, j: j, parity: true };
+    var s = P.streamSymbol(cw * 2 * P.CW_K + 2 * j + w);
+    s.cw = cw; s.w = w; s.j = j; s.parity = false;
+    return s;
+  };
+
+  // Data unit n on a PCS lane: every AM_PERIOD-th unit is that lane's alignment
+  // marker, the rest are symbols. Returns -1 for an AM.
+  P.laneDataIndex = function (n) {
+    if (mod(n, P.AM_PERIOD) === 0) return -1;
+    return n - Math.floor(n / P.AM_PERIOD) - 1;
+  };
+
+  // Symbol d on PCS lane p. Simplified distribution: each lane takes one symbol
+  // from codeword A, then one from codeword B, in round-robin lane order.
+  P.laneSymbolId = function (p, d) {
+    var cw = Math.floor(d / P.LANE_SYM_PER_PAIR), e = d - cw * P.LANE_SYM_PER_PAIR;
+    return { cw: cw, w: e & 1, j: (e >> 1) * P.N_PCS + p };
+  };
+  P.laneSymbol = function (p, d) {
+    var id = P.laneSymbolId(p, d);
+    return P.cwSymbol(id.cw, id.w, id.j);
+  };
+
+  // Codeword cube n of row w covers symbols CHUNK*c .. CHUNK*c+31 of codeword w in pair cw.
+  P.chunkId = function (n) {
+    var cw = Math.floor(n / P.CHUNKS);
+    return { cw: cw, c: n - cw * P.CHUNKS };
+  };
+
+  P.hex = function (v, digits) { return v.toString(16).toUpperCase().padStart(digits, '0'); };
+  P.bin = function (v, n) { return v.toString(2).padStart(n, '0'); };
+  P.glyph = function (b) { return b === 32 ? '·' : String.fromCharCode(b); };
+})(globalThis.PCS = globalThis.PCS || {});
+
 /* ---- state.js ---- */
 /* App state and the simulation clock: AM arrival events drive lock/deskew,
    periodic ticks drive the FEC counters. */
@@ -939,7 +1083,6 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     playing: true, speed: 1, u: 320,
     width: 4, preset: 'grouped',
     selected: -1, stage: null,
-    messageContent: 'Call me Ishmael',
     faults: { skewLane: 1, skewNs: 0, amLane: 3, amLoss: false, losLane: 0, los: false,
               noiseLane: -1, noise: 0, swap: false },
     rot: [0, 0, 0, 0, 0, 0, 0, 0],
@@ -951,22 +1094,6 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   var listeners = [];
   P.on = function (fn) { listeners.push(fn); };
   P.emit = function (what) { listeners.forEach(function (fn) { fn(what); }); };
-
-  // Per-lane message slices: lane i gets bytes [i, i+8, i+16, ...]
-  P.messageLaneSlice = function (lane) {
-    var msg = S.messageContent || '';
-    var bytes = [];
-    for (var i = lane; i < msg.length; i += 8) bytes.push(msg.charCodeAt(i));
-    return bytes;
-  };
-
-  // Message as a repeating buffer of bytes, padded to frame size
-  P.messageBytes = function (count) {
-    var msg = (S.messageContent || '').split('');
-    var buf = [];
-    for (var i = 0; i < count; i++) buf.push(msg[i % msg.length].charCodeAt(0));
-    return buf;
-  };
 
   P.resetCounters = function () {
     S.c = { corrected: 0, uncorrectable: 0, symbolErrors: 0, codewords: 0,
@@ -1459,32 +1586,16 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 })(globalThis.PCS = globalThis.PCS || {});
 
 /* ---- packets.js ---- */
-/* Moving data: one InstancedMesh for every cube in the scene, rebuilt each frame. */
+/* Moving data: one InstancedMesh for every cube in the scene, rebuilt each frame.
+   Each instance also gets an identity record so a click can say what it carries. */
 (function (P) {
   'use strict';
   var T = window.THREE, G = P.g;
   var MAX = 1400;
   var m4 = new T.Matrix4(), q = new T.Quaternion(), v = new T.Vector3(), sc = new T.Vector3();
   var c = new T.Color(), tmp = new T.Color();
-  var count = 0, msgBuf = P.messageBytes(256);
-
-  // Stages where message is readable as ASCII (before/after FEC)
-  var ASCII_TX_END = P.X.mux[0];           // through pre-FEC distributor
-  var ASCII_RX_START = P.X.reorder[1];     // after post-FEC interleave
-  var HEX_TX_START = 24.5;                 // pre-FEC distribution begins
-  var HEX_RX_END = 83.5;                   // post-FEC interleave ends
-
-  function msgCharAt(u, slot) {
-    // Approximate which message byte is at this position
-    var byteIdx = Math.floor((u - P.X.lanesStart) / P.GAP) % msgBuf.length;
-    return String.fromCharCode(msgBuf[byteIdx] || 32); // space if undefined
-  }
-
-  function symHexAt(u) {
-    // 10-bit symbol as hex, for abstract representation in FEC zone
-    var idx = Math.floor((u - HEX_TX_START) * 10 / P.GAP) % 1024;
-    return (idx & 0x3FF).toString(16).toUpperCase().padStart(3, '0');
-  }
+  var count = 0;
+  var meta = new Array(MAX), boxes = new Float32Array(MAX * 6);
 
   P.initPackets = function () {
     var geo = new T.BoxGeometry(1, 1, 1);
@@ -1496,12 +1607,15 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     G.scene.add(G.inst);
   };
 
-  function put(x, y, z, sx, sy, sz, col) {
+  function put(x, y, z, sx, sy, sz, col, id) {
     if (count >= MAX) return;
     v.set(x, y, z); sc.set(sx, sy, sz);
     m4.compose(v, q, sc);
     G.inst.setMatrixAt(count, m4);
     G.inst.setColorAt(count, col);
+    meta[count] = id;
+    var o = count * 6;
+    boxes[o] = x; boxes[o + 1] = y; boxes[o + 2] = z; boxes[o + 3] = sx; boxes[o + 4] = sy; boxes[o + 5] = sz;
     count++;
   }
 
@@ -1522,36 +1636,35 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       var noisy = f.noise > 0 && (f.noiseLane < 0 || f.noiseLane === lane.serdes);
       var dead = f.los && f.losLane === lane.serdes;
       var amBad = f.amLoss && f.amLane === p;
-      var showAscii = (S.u < HEX_TX_START || S.u > HEX_RX_END) && (x < HEX_TX_START || x > HEX_RX_END);
-      var showHex = S.u >= HEX_TX_START && S.u <= HEX_RX_END && x >= HEX_TX_START && x <= HEX_RX_END;
       for (var n = Math.max(nLo, 0); n <= nHi; n++) {
         var u = X.lanesStart + S.u - n * P.GAP;
         var x = P.warp(u, segs);
         if (x < X.lanesStart || x > X.lanesEnd) continue;
-        var dx = P.warp(u + 0.05, segs) - x;
+        var dx = P.warp(u + 0.05, segs) - x;            // local compression from mux/skew/deskew
         var comp = Math.min(Math.max(dx / 0.05, 0.12), 1);
         var y = P.yPath(link, lane, x), z = P.zPath(link, lane, x);
         var isAm = n % P.AM_PERIOD === 0;
+        var state = '';
         c.copy(G.col.lanes[p]);
         var len = 0.62 * comp, h = 0.42, d = 0.42;
-        var label = '';
-        if (isAm) { c.lerp(G.col.paper, 0.45); len = Math.max(0.18, 0.26 * comp); h = 1.05; d = 0.9; label = 'AM'; }
-        else if (showAscii) label = msgCharAt(u, p);
-        else if (showHex) { c.lerp(G.col.paper, 0.3); label = symHexAt(u); }
+        if (isAm) { c.lerp(G.col.paper, 0.45); len = Math.max(0.18, 0.26 * comp); h = 1.05; d = 0.9; }
         if (dead && x > X.noiseAt && x < X.amLock + 0.5) {
-          c.copy(G.col.muted); y += (P.hash(n, p) - 0.5) * 0.5; h *= 0.6;
+          c.copy(G.col.muted); y += (P.hash(n, p) - 0.5) * 0.5; h *= 0.6; state = 'los';
         } else if (amBad && isAm && x > X.mux[0]) {
-          c.copy(G.col.bad); h = 0.75;
+          c.copy(G.col.bad); h = 0.75; state = 'ambad';
         } else if (noisy && !isAm && x > X.noiseAt && x < X.lanesEnd && P.hash(n, p * 7 + 3) < pVis) {
-          c.copy(G.col.bad); h = 0.55; d = 0.55;
+          c.copy(G.col.bad); h = 0.55; d = 0.55; state = 'err';
         }
         if (!S.align && x > X.deskew[1]) c.lerp(G.col.paper, 0.6);
-        put(x, y, z, len, h, d, dim(c, on));
+        put(x, y, z, len, h, d, dim(c, on), { fam: 'lane', p: p, n: n, x: x, state: state });
       }
     });
   }
 
   // Aggregate (single-stream) segments before distribution and after reorder.
+  // Cubes in the same family share an index, so a cube keeps its identity
+  // when it moves from one segment into the next (200GMII transfer n becomes
+  // 66-bit block n).
   var SEGS = [
     { x: [0, 7.5], kind: 'mii', side: 'tx' },
     { x: [7.5, 12.5], kind: 'b66', side: 'tx' },
@@ -1566,10 +1679,17 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   ];
   var GAPS = { mii: 0.75, b66: 0.75, b257: 3.0, row: 1.25 };
   var SIZE = { mii: [0.42, 0.42, 0.42], b66: [0.62, 0.62, 1.1], b257: [2.4, 0.95, 1.2], row: [1.0, 0.36, 0.7] };
+  var FAM = { mii: 'g66', b66: 'g66', b257: 'g257', row: 'row' };
+  P.SEGS = SEGS;
+
+  function mod(a, n) { return ((a % n) + n) % n; }
+  P.isAggAm = function (sg, n, pos) {
+    return (sg.am === 'in' && mod(n, 5) === 0 && pos > 21.5) || (sg.am === 'out' && mod(n, 5) === 0 && pos < 95.5);
+  };
 
   function drawAggregate() {
     var S = P.state, last = S.lastTick, uncFrac = last && last.codewords ? last.uncorrectable / last.codewords : 0;
-    SEGS.forEach(function (sg) {
+    SEGS.forEach(function (sg, si) {
       var gap = GAPS[sg.kind], sz = SIZE[sg.kind];
       var rows = sg.kind === 'row' ? [0, 1] : [null];
       rows.forEach(function (row) {
@@ -1579,35 +1699,27 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
           var pos = S.u - off - n * gap;               // every cube moves at the same speed
           if (pos < sg.x[0] || pos > sg.x[1]) continue;
           var y = row === null ? 0 : (row === 0 ? 0.42 : -0.42), sx = sz[0], sy = sz[1], sz2 = sz[2];
-          var col = c;
+          var col = c, state = '';
+          var parity = sg.kind === 'row' && P.chunkId(mod(n, 1e9)).c === P.CHUNKS - 1;
           if (sg.kind === 'mii') col.copy(G.col.muted);
           else if (sg.kind === 'row') col.copy(row === 0 ? G.col.cwA : G.col.cwB);
           else col.copy(sg.scr ? G.col.edge : G.col.ink);
-          if (sg.kind === 'row' && ((n % 18) + 18) % 18 >= 16 && sg.side === 'tx' && pos > 28.75) col.lerp(G.col.ink, 0.5);
-          var isAm = (sg.am === 'in' && ((n % 5) + 5) % 5 === 0 && pos > 21.5) || (sg.am === 'out' && ((n % 5) + 5) % 5 === 0 && pos < 95.5);
-          if (isAm) { col.copy(G.col.am); sy = 1.6; sx = 1.0; }
+          if (parity && (sg.side === 'tx' ? pos > 28.75 : pos < 88)) col.lerp(G.col.ink, 0.5);
+          var isAm = P.isAggAm(sg, n, pos);
           if (sg.side === 'rx' && !S.align) {
             if (sg.kind !== 'mii') continue;
-            col.copy(G.col.bad); sy *= 0.7;
+            col.copy(G.col.bad); sy *= 0.7; state = 'lf';
           } else if (sg.side === 'rx' && uncFrac > 0 && !isAm && pos > 91 && P.hash(n, 911) < Math.min(0.6, uncFrac * 40)) {
-            col.copy(G.col.bad);
-          } else if (sg.kind === 'mii' && sg.side === 'tx' && P.hash(n, 5) < 0.12) {
-            col.lerp(G.col.paper, 0.6);                      // idle between frames
+            col.copy(G.col.bad); state = 'unc';
           }
-          put(pos, y, 0, sx, sy, sz2, dim(col, P.state.selected < 0, 0.45));
+          put(pos, y, 0, sx, sy, sz2, dim(col, P.state.selected < 0, 0.45),
+            { fam: FAM[sg.kind], seg: si, n: n, row: row, x: pos, state: state });
+          // AM groups are inserted between 257-bit blocks; they do not replace one.
+          if (isAm) put(pos + gap / 2, y, 0, 0.32, 1.6, sz2, dim(c.copy(G.col.am), P.state.selected < 0, 0.45),
+            { fam: 'amg', seg: si, n: n, x: pos + gap / 2, state: '' });
         }
       });
     });
-  }
-
-  // Stages where message is readable as ASCII (before/after FEC)
-  var ASCII_TX_END = P.X.mux[0];           // through pre-FEC distributor
-  var ASCII_RX_START = P.X.reorder[1];     // after post-FEC interleave
-
-  function msgCharAt(u, slot) {
-    // Approximate which message byte is at this position
-    var byteIdx = Math.floor((u - P.X.lanesStart) / P.GAP) % msgBuf.length;
-    return String.fromCharCode(msgBuf[byteIdx] || 32); // space if undefined
   }
 
   P.drawPackets = function () {
@@ -1617,6 +1729,19 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     G.inst.count = count;
     G.inst.instanceMatrix.needsUpdate = true;
     if (G.inst.instanceColor) G.inst.instanceColor.needsUpdate = true;
+  };
+
+  // Picking support for the inspector.
+  P.packetCount = function () { return count; };
+  P.packetMeta = function (i) { return meta[i]; };
+  P.packetBox = function (i) { var o = i * 6; return boxes.subarray(o, o + 6); };
+  P.findPacket = function (key) {
+    for (var i = 0; i < count; i++) if (P.packetKey(meta[i]) === key) return i;
+    return -1;
+  };
+  P.packetKey = function (m) {
+    if (!m) return '';
+    return m.fam === 'lane' ? 'lane:' + m.p + ':' + m.n : m.fam + ':' + (m.row == null ? '' : m.row) + ':' + m.n;
   };
 
   // RS decode box flashes on corrected / uncorrectable codewords.
@@ -1745,6 +1870,361 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   };
 })(globalThis.PCS = globalThis.PCS || {});
 
+/* ---- inspect-model.js ---- */
+/* Describes what a picked block carries at the point where it was clicked.
+   Returns plain data; inspector.js turns it into HTML. */
+(function (P) {
+  'use strict';
+
+  function stageAt(x) {
+    var best = null;
+    P.BOXES.forEach(function (b) { if (x >= b.x[0] - 0.75 && x <= b.x[1] + 0.75 && !best) best = b; });
+    if (best) return best.name;
+    var X = P.X;
+    if (x > X.chan[0] && x < X.chan[1]) return 'Physical SerDes lane';
+    if (x > X.lanesStart && x < X.mux[0]) return 'PCS lane, between symbol distribution and the PMA';
+    return 'In transit';
+  }
+
+  function chars(bytes) { return bytes.map(P.glyph).join(''); }
+  function hexBytes(bytes) { return bytes.map(function (b) { return P.hex(b, 2); }).join(' '); }
+
+  // Which characters a set of symbols touches, and how many bits of each.
+  function sourcesOf(syms) {
+    var map = {}, order = [];
+    syms.forEach(function (s) {
+      if (s.parity) return;
+      s.parts.forEach(function (pt) {
+        if (pt.src !== 'b') return;
+        if (!map[pt.idx]) { map[pt.idx] = 0; order.push(pt.idx); }
+        map[pt.idx] += pt.n;
+      });
+    });
+    order.sort(function (a, b) { return a - b; });
+    return order.map(function (i) { return { idx: i, ch: P.byteAt(i), bits: map[i] }; });
+  }
+
+  function symbolInfo(s) {
+    if (s.parity) return { parity: true, cw: s.cw, w: s.w, j: s.j };
+    return {
+      parity: false, cw: s.cw, w: s.w, j: s.j, value: s.value,
+      hex: P.hex(s.value, 3), bin: P.bin(s.value, 10),
+      parts: s.parts.map(function (pt) {
+        return pt.src === 'h'
+          ? { kind: 'hdr', block: pt.idx, bits: pt.bits }
+          : { kind: 'byte', ch: P.byteAt(pt.idx), idx: pt.idx, n: pt.n, hi: pt.hi, lo: pt.lo, bits: pt.bits, whole: pt.n === 8 };
+      })
+    };
+  }
+
+  P.describePacket = function (m) {
+    if (!m) return null;
+    var S = P.state, where = stageAt(m.x), seg = m.seg != null ? P.SEGS[m.seg] : null;
+    var side = m.x < P.X.muxIn ? 'TX' : m.x > P.X.demux[0] ? 'RX' : 'Channel';
+    var out = { where: where, side: side, state: m.state };
+
+    if (m.fam === 'g66') {
+      var b = P.block66(m.n);
+      out.kind = seg.kind === 'mii' ? 'mii' : 'b66';
+      out.title = seg.kind === 'mii' ? '200GMII transfer ' + m.n : '66-bit block ' + m.n;
+      out.bytes = b.bytes; out.ascii = chars(b.bytes); out.hex = hexBytes(b.bytes);
+      out.hdr = b.hdr; out.readable = true;
+      return out;
+    }
+    if (m.fam === 'amg') {
+      out.kind = 'amgroup'; out.title = 'Alignment marker group';
+      out.readable = false;
+      return out;
+    }
+    if (m.fam === 'g257') {
+      var blk = P.block257(m.n);
+      out.kind = 'b257'; out.title = '257-bit block ' + m.n;
+      out.bytes = blk.bytes; out.ascii = chars(blk.bytes); out.hex = hexBytes(blk.bytes);
+      out.hdr = blk.hdr; out.from66 = [blk.first66, blk.first66 + 3];
+      out.scrambled = !!seg.scr; out.readable = true;
+      return out;
+    }
+    if (m.fam === 'row') {
+      var id = P.chunkId(m.n), w = m.row, j0 = id.c * P.CHUNK, syms = [];
+      for (var j = j0; j < Math.min(j0 + P.CHUNK, P.CW_N); j++) syms.push(P.cwSymbol(id.cw, w, j));
+      out.kind = 'cw'; out.readable = false;
+      out.title = 'Codeword ' + (w ? 'B' : 'A') + ', pair ' + id.cw + ', symbols ' + j0 + '–' + (j0 + syms.length - 1);
+      out.cw = id.cw; out.w = w; out.j0 = j0;
+      out.symbols = syms.map(symbolInfo);
+      out.parityCount = syms.filter(function (s) { return s.parity; }).length;
+      out.sources = sourcesOf(syms);
+      return out;
+    }
+    if (m.fam === 'lane') {
+      var lane = S.link.lanes[m.p], d = P.laneDataIndex(m.n);
+      out.lane = { pcs: m.p, serdes: lane.serdes, slot: lane.slot, k: S.link.k, rxPma: lane.rxPma, rxSerdes: lane.rxSerdes };
+      if (d < 0) {
+        out.kind = 'am'; out.title = 'Alignment marker, PCS lane ' + m.p; out.readable = false;
+        return out;
+      }
+      var s = P.laneSymbol(m.p, d);
+      out.kind = 'sym'; out.readable = false;
+      out.title = 'PCS lane ' + m.p + ', symbol ' + d;
+      out.symbol = symbolInfo(s);
+      out.sources = sourcesOf([s]);
+      return out;
+    }
+    return null;
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- inspector.js ---- */
+/* Click a block in the 3D scene to see what it carries. The block is outlined,
+   the animation pauses, and a card next to it shows ASCII and hex (or 10-bit
+   symbols inside the FEC zone). The card follows the block if you resume. */
+(function (P) {
+  'use strict';
+  var T = window.THREE, G = P.g, S = P.state;
+  var ray = new T.Raycaster(), ndc = new T.Vector2(), v = new T.Vector3();
+  var card, outline, picked = null, lastSig = '', symSel = -1;
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
+  }
+  function q(ch) { return ch === 32 ? 'space' : '‘' + esc(String.fromCharCode(ch)) + '’'; }
+
+  P.initInspector = function (host) {
+    card = document.createElement('div');
+    card.className = 'inspector';
+    card.id = 'inspector';
+    card.hidden = true;
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-label', 'Block contents');
+    host.appendChild(card);
+
+    outline = new T.LineSegments(new T.EdgesGeometry(new T.BoxGeometry(1, 1, 1)),
+      new T.LineBasicMaterial({ color: G.col.ink, depthTest: false, transparent: true }));
+    outline.renderOrder = 10;
+    outline.visible = false;
+    G.scene.add(outline);
+
+    var el = G.renderer.domElement, down = null;
+    el.addEventListener('pointerdown', function (e) { down = { x: e.clientX, y: e.clientY, b: e.button }; });
+    el.addEventListener('pointerup', function (e) {
+      if (!down || down.b !== 0) return;
+      var moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+      down = null;
+      if (moved > 5) return;
+      var r = el.getBoundingClientRect();
+      pickAt(e.clientX - r.left, e.clientY - r.top);
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (down) return;
+      var r = el.getBoundingClientRect();
+      el.style.cursor = nearest(e.clientX - r.left, e.clientY - r.top, 12) >= 0 ? 'pointer' : '';
+    });
+
+    card.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-act]');
+      if (!b) return;
+      var act = b.dataset.act;
+      if (act === 'close') P.closeInspector(true);
+      else if (act === 'resume') P.setPlaying(true);
+      else if (act === 'sym') { symSel = +b.dataset.i; lastSig = ''; }
+      else if (act === 'prev' || act === 'next') stepBlock(act === 'next' ? 1 : -1);
+    });
+    card.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.stopPropagation(); P.closeInspector(true); }
+    });
+  };
+
+  // Screen-space nearest block centre; used when the ray misses a small cube.
+  function nearest(sx, sy, radius) {
+    var best = -1, bd = radius * radius, n = P.packetCount();
+    for (var i = 0; i < n; i++) {
+      var b = P.packetBox(i);
+      v.set(b[0], b[1], b[2]).project(G.camera);
+      if (v.z > 1) continue;
+      var px = (v.x + 1) / 2 * G.w, py = (1 - v.y) / 2 * G.h, d = (px - sx) * (px - sx) + (py - sy) * (py - sy);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+
+  function pickAt(sx, sy) {
+    ndc.set(sx / G.w * 2 - 1, -(sy / G.h) * 2 + 1);
+    ray.setFromCamera(ndc, G.camera);
+    var hit = ray.intersectObject(G.inst, false)[0];
+    var i = hit && hit.instanceId != null && hit.instanceId < P.packetCount() ? hit.instanceId : nearest(sx, sy, 16);
+    if (i < 0) { P.closeInspector(); return; }
+    open(P.packetMeta(i));
+  }
+
+  // Keyboard: inspect the block nearest the centre of the view.
+  P.inspectCenter = function () {
+    var i = nearest(G.w / 2, G.h / 2, Math.max(G.w, G.h));
+    if (i >= 0) open(P.packetMeta(i), true);
+  };
+
+  function open(m, focus) {
+    picked = { key: P.packetKey(m), meta: m };
+    symSel = -1; lastSig = '';
+    if (S.playing) P.setPlaying(false);
+    card.hidden = false;
+    P.updateInspector();
+    if (focus) { var b = card.querySelector('[data-act="close"]'); if (b) b.focus(); }
+  }
+
+  P.closeInspector = function (restoreFocus) {
+    picked = null;
+    card.hidden = true;
+    outline.visible = false;
+    if (restoreFocus) document.getElementById('viewport').focus();
+  };
+  P.inspectorOpen = function () { return !!picked; };
+
+  // Previous / next block in the same family: along the lane, or along the stream.
+  function stepBlock(dir) {
+    if (!picked) return;
+    // Higher n is further back in the stream, so "next" means sent later.
+    var m = picked.meta, key = m.fam === 'lane' ? 'lane:' + m.p + ':' + (m.n + dir)
+      : m.fam + ':' + (m.row == null ? '' : m.row) + ':' + (m.n + dir);
+    var i = P.findPacket(key);
+    if (i >= 0) { picked = { key: key, meta: P.packetMeta(i) }; symSel = -1; lastSig = ''; P.updateInspector(); }
+  }
+
+  // Called every frame after drawPackets.
+  // 66-bit block 4m sits where 257-bit block m is, so the card can follow a
+  // block through the transcode in either direction.
+  function handoff(m) {
+    if (m.fam === 'g66') return 'g257::' + Math.floor(m.n / 4);
+    if (m.fam === 'g257') return 'g66::' + 4 * m.n;
+    return null;
+  }
+
+  P.updateInspector = function () {
+    if (!picked) return;
+    var i = P.findPacket(picked.key);
+    if (i < 0) {
+      var alt = handoff(picked.meta), j = alt ? P.findPacket(alt) : -1;
+      if (j >= 0) { picked = { key: alt, meta: P.packetMeta(j) }; i = j; symSel = -1; }
+    }
+    if (i < 0) {
+      outline.visible = false;
+      if (lastSig !== 'gone') {
+        lastSig = 'gone';
+        var body = card.querySelector('.ins-body');
+        if (body) body.innerHTML = '<p class="ins-note">This block has left this part of the scene' +
+          (picked.meta.fam === 'lane' ? '. After lane reorder its symbol goes back into its codeword for RS decode' : '') +
+          '. Click another block to keep exploring.</p>';
+      }
+      return;
+    }
+    var m = P.packetMeta(i), b = P.packetBox(i);
+    picked.meta = m;
+    outline.visible = true;
+    outline.position.set(b[0], b[1], b[2]);
+    outline.scale.set(b[3] + 0.14, b[4] + 0.14, b[5] + 0.14);
+    outline.material.color.copy(G.col.ink);
+
+    var d = P.describePacket(m);
+    var sig = P.payloadVersion + '|' + d.title + '|' + d.where + '|' + d.state + '|' + S.playing + '|' + symSel + '|' + (d.lane ? d.lane.rxPma + ':' + d.lane.serdes : '');
+    if (sig !== lastSig) { lastSig = sig; card.innerHTML = render(d); }
+    place(b);
+  };
+
+  function place(b) {
+    var vp = G.host, W = vp.clientWidth, H = vp.clientHeight;
+    if (W < 620) { card.classList.add('docked'); card.style.transform = ''; return; }
+    card.classList.remove('docked');
+    v.set(b[0], b[1], b[2]).project(G.camera);
+    var sx = (v.x + 1) / 2 * W, sy = (1 - v.y) / 2 * H;
+    var cw = card.offsetWidth, ch = card.offsetHeight, gap = 18;
+    var x = sx + gap + cw < W - 8 ? sx + gap : sx - gap - cw;
+    x = Math.max(8, Math.min(x, W - cw - 8));
+    var y = Math.max(8, Math.min(sy - ch / 2, H - ch - 8));
+    card.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(y) + 'px)';
+  }
+
+  function cells(bytes, cls) {
+    return bytes.map(function (c) {
+      return '<span class="cell ' + (cls || '') + (c === 32 ? ' sp' : '') + '"><b>' + esc(P.glyph(c)) + '</b><i>' + P.hex(c, 2) + '</i></span>';
+    }).join('');
+  }
+
+  function symbolLine(s) {
+    if (s.parity) return '<p class="ins-note">RS parity symbol ' + s.j + ' of codeword ' + (s.w ? 'B' : 'A') +
+      '. The encoder computes the 30 parity symbols from the 514 data symbols. They carry no text.</p>';
+    var bits = '', legend = [];
+    s.parts.forEach(function (pt, k) {
+      bits += '<span class="sb c' + (k % 3) + '">' + pt.bits + '</span>';
+      legend.push(pt.kind === 'hdr'
+        ? '<span class="c' + (k % 3) + '">header bit of 257-bit block ' + pt.block + '</span>'
+        : '<span class="c' + (k % 3) + '">' + (pt.whole ? 'all 8 bits' : pt.n + ' bit' + (pt.n > 1 ? 's' : '') + ' (' + (pt.n > 1 ? pt.hi + '–' + pt.lo : pt.hi) + ')') +
+          ' of ' + q(pt.ch) + '</span>');
+    });
+    // A few characters either side, so repeated letters can be told apart.
+    var idx = s.parts.filter(function (pt) { return pt.kind === 'byte'; }).map(function (pt) { return pt.idx; });
+    var ctx = '';
+    if (idx.length) {
+      var lo = idx[0] - 6, hi = idx[idx.length - 1] + 6;
+      for (var i = lo; i <= hi; i++) {
+        var k = idx.indexOf(i), g = esc(P.glyph(P.byteAt(i)));
+        ctx += k >= 0 ? '<mark class="c' + (s.parts.findIndex(function (pt) { return pt.idx === i && pt.kind === 'byte'; }) % 3) + '">' + g + '</mark>' : g;
+      }
+      ctx = '<p class="ins-ctx">In the text: <code>…' + ctx + '…</code></p>';
+    }
+    return '<div class="ins-sym"><span class="symhex">' + s.hex + '</span><span class="symbin">' + bits + '</span></div>' +
+      '<p class="ins-src">' + legend.join(' + ') + '</p>' + ctx;
+  }
+
+  function render(d) {
+    var h = '<header class="ins-head"><div><span class="ins-side">' + d.side + ' · ' + esc(d.where) + '</span>' +
+      '<h4>' + esc(d.title) + '</h4></div><button type="button" class="ins-x" data-act="close" aria-label="Close">×</button></header><div class="ins-body">';
+
+    if (d.state === 'lf') h += '<p class="ins-warn">No data. The RX PCS is not aligned, so it sends Local Fault to the MAC.</p>';
+    if (d.state === 'unc') h += '<p class="ins-warn">This block came from an uncorrectable codeword. The PCS marks it as an error, and the MAC will see a bad frame.</p>';
+    if (d.state === 'err') h += '<p class="ins-warn">Channel noise flipped bits in this symbol. RS decode can repair up to 15 bad symbols per codeword.</p>';
+    if (d.state === 'los') h += '<p class="ins-warn">This SerDes lane has lost signal. The receiver gets no valid bits for any PCS lane it carries.</p>';
+    if (d.state === 'ambad') h += '<p class="ins-warn">This marker arrives corrupted. Enough bad markers in a row and lane ' + d.lane.pcs + ' loses lock.</p>';
+
+    if (d.kind === 'mii' || d.kind === 'b66') {
+      h += '<p class="ins-ascii">' + esc(d.ascii.replace(/ /g, '·')) + '</p><div class="cells">' +
+        (d.kind === 'b66' ? '<span class="cell hdr"><b>01</b><i>sync</i></span>' : '') + cells(d.bytes) + '</div>';
+      h += '<p class="ins-note">' + (d.kind === 'mii'
+        ? '8 data bytes per transfer. Control characters (preamble, idles, terminate) are left out of this model.'
+        : 'Same 8 bytes plus a 2-bit sync header. 01 means the block is all data.') + '</p>';
+    } else if (d.kind === 'b257') {
+      h += '<p class="ins-ascii">' + esc(d.ascii.replace(/ /g, '·')) + '</p><div class="cells wrap"><span class="cell hdr"><b>1</b><i>hdr</i></span>' +
+        [0, 1, 2, 3].map(function (g) { return '<span class="grp">' + cells(d.bytes.slice(g * 8, g * 8 + 8), d.scrambled ? 'scr' : '') + '</span>'; }).join('') + '</div>';
+      h += '<p class="ins-note">Four 66-bit blocks (' + d.from66[0] + '–' + d.from66[1] + ') packed into one: their four 2-bit headers become a single 1. ' +
+        (d.scrambled ? 'This block is <b>scrambled</b>. On the wire the bits look random; the text is shown unscrambled so you can follow it.' : '') + '</p>';
+    } else if (d.kind === 'amgroup') {
+      h += '<p class="ins-note">Eight alignment markers, one for each PCS lane, inserted together after the scrambler. Each is 120 bits: common bytes for finding it, unique bytes naming the lane. They are not part of the text.</p>';
+    } else if (d.kind === 'cw') {
+      h += '<p class="ins-note">10-bit RS symbols. Characters are 8 bits, so symbol edges no longer line up with them. The text is unreadable here until post-FEC interleave on the RX side.</p>';
+      h += '<div class="syms">' + d.symbols.map(function (s, i) {
+        return '<button type="button" class="sym' + (s.parity ? ' par' : '') + (i === symSel ? ' on' : '') + '" data-act="sym" data-i="' + i + '">' +
+          (s.parity ? 'P' : s.hex) + '</button>';
+      }).join('') + '</div>';
+      if (symSel >= 0) h += symbolLine(d.symbols[symSel]);
+      else if (d.sources.length) h += '<p class="ins-src">Holds bits of: <code>' + esc(d.sources.map(function (s) { return P.glyph(s.ch); }).join('')) + '</code>. Click a symbol to see which.</p>';
+      if (d.parityCount) h += '<p class="ins-note">P = parity symbols added by the RS(544,514) encoder.</p>';
+    } else if (d.kind === 'sym') {
+      h += symbolLine(d.symbol);
+      if (!d.symbol.parity) h += '<p class="ins-note">Symbol ' + d.symbol.j + ' of codeword ' + (d.symbol.w ? 'B' : 'A') + ' (pair ' + d.symbol.cw + '). ' +
+        'A PCS lane carries 10-bit symbols, not characters.</p>';
+    } else if (d.kind === 'am') {
+      h += '<p class="ins-note">The alignment marker for PCS lane ' + d.lane.pcs + '. The receiver finds it by its common bytes and reads the lane number from its unique bytes. That is how lane identity survives the trip.</p>';
+    }
+
+    if (d.lane) {
+      var L = d.lane;
+      h += '<p class="ins-path"><span class="sw l' + L.pcs + '"></span>PCS ' + L.pcs + ' → SerDes ' + L.serdes +
+        (L.k > 1 ? ' (bit slot ' + (L.slot + 1) + ' of ' + L.k + ')' : '') + ' → RX PMA ' + L.rxPma + ' → reordered to PCS ' + L.pcs + '</p>';
+    }
+    h += '</div><footer class="ins-foot"><button type="button" class="btn" data-act="prev" title="Block before this one">← Prev</button>' +
+      '<button type="button" class="btn" data-act="next" title="Block after this one">Next →</button>' +
+      (S.playing ? '' : '<button type="button" class="btn" data-act="resume">Resume and follow</button>') + '</footer>';
+    return h;
+  }
+})(globalThis.PCS = globalThis.PCS || {});
+
 /* ---- ui-controls.js ---- */
 /* Toolbar, lane chips, stage rail, stage detail and keyboard shortcuts. */
 (function (P) {
@@ -1847,10 +2327,11 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 
   P.initControls = function () {
     buildRail();
-    $('msg-input').addEventListener('input', function (e) {
-      S.messageContent = e.target.value || 'Call me Ishmael';
-      P.emit('message');
-    });
+    var mi = $('msg-input');
+    mi.value = P.PAYLOAD_DEFAULT.trim();
+    mi.placeholder = P.PAYLOAD_SOURCE;
+    mi.title = P.PAYLOAD_SOURCE;
+    mi.addEventListener('input', function () { P.setPayload(mi.value ? mi.value + ' ' : ''); });
     $('btn-play').onclick = function () { P.setPlaying(!S.playing); };
     $('btn-step').onclick = P.step;
     $('sel-speed').onchange = function (e) { S.speed = +e.target.value; };
@@ -1874,14 +2355,15 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 
     var vp = $('viewport');
     vp.tabIndex = 0;
-    vp.setAttribute('aria-label', '3D lane diagram. Arrow keys pan, plus and minus zoom.');
+    vp.setAttribute('aria-label', '3D lane diagram. Arrow keys pan, plus and minus zoom, Enter inspects the block nearest the centre.');
     vp.addEventListener('keydown', function (e) {
       var c = P.g.controls, cam = P.g.camera;
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         var dx = e.key === 'ArrowLeft' ? -3 : 3; c.target.x += dx; cam.position.x += dx; e.preventDefault();
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         var dy = e.key === 'ArrowUp' ? 1 : -1; c.target.y += dy; cam.position.y += dy; e.preventDefault();
-      } else if (e.key === '+' || e.key === '=') { P.dolly(0.85); e.preventDefault(); }
+      } else if (e.key === 'Enter' && e.target === vp) { P.inspectCenter(); e.preventDefault(); }
+      else if (e.key === '+' || e.key === '=') { P.dolly(0.85); e.preventDefault(); }
       else if (e.key === '-' || e.key === '_') { P.dolly(1.18); e.preventDefault(); }
     });
 
@@ -1892,6 +2374,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       if (e.key === 'p' || e.key === 'P') { P.setPlaying(!S.playing); }
       else if (e.key === '.') { P.step(); }
       else if (/^[0-7]$/.test(e.key)) { P.selectLane(+e.key); }
+      else if (e.key === 'Escape' && P.inspectorOpen && P.inspectorOpen()) { P.closeInspector(); }
       else if (e.key === 'Escape' && S.selected >= 0) { S.selected = -1; P.emit('select'); }
       else return;
       e.preventDefault();
@@ -2197,53 +2680,6 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   }
 })(globalThis.PCS = globalThis.PCS || {});
 
-/* ---- ui-message.js ---- */
-/* Message tracker: show ASCII before FEC, hex in FEC zone, ASCII after FEC. */
-(function (P) {
-  'use strict';
-  var S = P.state, $ = function (id) { return document.getElementById(id); };
-
-  P.renderMessage = function () {
-    var msg = S.messageContent || 'Call me Ishmael';
-    var len = msg.length;
-    var detail = $('msg-detail');
-    if (!detail) return;
-
-    var zones = [
-      { x: [-2, 24.5], name: 'TX: MAC → Pre-FEC', show: 'ascii' },
-      { x: [24.5, 83.5], name: 'FEC zone: Pre-FEC → Post-FEC interleave', show: 'hex' },
-      { x: [83.5, 116], name: 'RX: Post-FEC → MAC', show: 'ascii' }
-    ];
-
-    var html = '<div class="msg-zones">';
-    zones.forEach(function (z) {
-      var here = S.u >= z.x[0] && S.u <= z.x[1];
-      html += '<div class="msg-zone' + (here ? ' active' : '') + '"><span class="name">' + z.name + '</span>' +
-        '<span class="type">' + (z.show === 'ascii' ? 'ASCII readable' : '10-bit symbols') + '</span></div>';
-    });
-    html += '</div>';
-
-    html += '<div class="msg-lanes"><span class="mlabel">Per-lane content:</span>';
-    for (var i = 0; i < 8; i++) {
-      var slice = P.messageLaneSlice(i).map(function (c) { return String.fromCharCode(c); }).join('');
-      html += '<div class="mlane l' + i + '"><small>Lane ' + i + '</small><code>' + (slice || '(empty)') + '</code></div>';
-    }
-    html += '</div>';
-
-    html += '<p class="msg-note">Message flows through the pipeline: readable as text before Pre-FEC and after Post-FEC interleave, ' +
-      'hidden as 10-bit symbols during FEC encoding/decoding (byte alignment breaks, ' +
-      'so characters are no longer visible). Each lane carries every ' + (8 / len === Math.floor(8 / len) ? Math.floor(8 / len) : '~1 of ' + len) + ' character.</p>';
-
-    detail.innerHTML = html;
-  };
-
-  P.on(function (what) {
-    if (what === 'message' || what === 'link' || what === 'play' || what === 'stage') {
-      P.renderMessage();
-    }
-  });
-})(globalThis.PCS = globalThis.PCS || {});
-
 /* ---- figures.js ---- */
 /* Static explanatory figures for the narrative, drawn as inline SVG. */
 (function (P) {
@@ -2408,22 +2844,19 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 
   function onEvent(what) {
     if (what === 'link') {
-      P.buildLinkScene(); P.buildLabels(); P.renderMapping(); P.scopeNote(); P.renderMessage();
+      P.buildLinkScene(); P.buildLabels(); P.renderMapping(); P.scopeNote();
       if (S.width !== lastWidth) { lastWidth = S.width; P.renderFaults(); P.sizeScope(); }
       P.syncToolbar(); P.renderDiag();
     } else if (what === 'lock' || what === 'align') {
       P.styleLinkScene(); P.buildLabels(); P.renderMapping(); P.syncToolbar(); P.renderDiag();
     } else if (what === 'select') {
       P.styleLinkScene(); P.buildLabels(); P.renderMapping(); P.syncToolbar(); P.renderDiag();
-    } else if (what === 'message') {
-      // Message changed; redraw packets on next frame and update tracker
-      P.renderMessage();
     } else if (what === 'fault') {
       P.styleLinkScene(); P.renderDiag();
     } else if (what === 'stage') {
       P.buildLabels();
     } else if (what === 'tick') {
-      // Diagnostics and message position update from the frame loop at a steady rate.
+      // Diagnostics are refreshed from the frame loop at a steady rate.
     }
   }
 
@@ -2447,6 +2880,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     P.updatePulse(dt);
     P.drawPackets();
     P.updateCamera(now);
+    P.updateInspector();
     G.renderer.render(G.scene, G.camera);
     P.updateLabels();
     P.drawScope();
@@ -2454,7 +2888,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 
   function themeChanged() {
     requestAnimationFrame(function () {
-      P.readTheme(); P.recolorStatic(); P.drawScope();
+      P.readTheme(); P.recolorStatic(); P.drawScope(); P.inspectorRecolor && P.inspectorRecolor();
     });
   }
 
@@ -2475,11 +2909,11 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       P.initLabels(vp);
       P.initPackets();
       P.buildBoxes();
+      P.initInspector(vp);
     } else {
       P.buildLinkScene = P.styleLinkScene = P.buildLabels = P.recolorStatic = function () {};
     }
     P.rebuild(false);
-    P.renderMessage();
     if (!G.failed) {
       var narrow = vp.clientWidth < 760;
       P.flyTo(narrow ? P.framePose(29, 72, 1) : P.framePose(-2, 118, 0.6), 0);

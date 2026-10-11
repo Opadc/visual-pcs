@@ -8,22 +8,19 @@
 
   function onEvent(what) {
     if (what === 'link') {
-      P.buildLinkScene(); P.buildLabels(); P.renderMapping(); P.scopeNote(); P.renderMessage();
+      P.buildLinkScene(); P.buildLabels(); P.renderMapping(); P.scopeNote();
       if (S.width !== lastWidth) { lastWidth = S.width; P.renderFaults(); P.sizeScope(); }
       P.syncToolbar(); P.renderDiag();
     } else if (what === 'lock' || what === 'align') {
       P.styleLinkScene(); P.buildLabels(); P.renderMapping(); P.syncToolbar(); P.renderDiag();
     } else if (what === 'select') {
       P.styleLinkScene(); P.buildLabels(); P.renderMapping(); P.syncToolbar(); P.renderDiag();
-    } else if (what === 'message') {
-      // Message changed; redraw packets on next frame and update tracker
-      P.renderMessage();
     } else if (what === 'fault') {
       P.styleLinkScene(); P.renderDiag();
     } else if (what === 'stage') {
       P.buildLabels();
     } else if (what === 'tick') {
-      // Diagnostics and message position update from the frame loop at a steady rate.
+      // Diagnostics are refreshed from the frame loop at a steady rate.
     }
   }
 
@@ -47,6 +44,7 @@
     P.updatePulse(dt);
     P.drawPackets();
     P.updateCamera(now);
+    P.updateInspector();
     G.renderer.render(G.scene, G.camera);
     P.updateLabels();
     P.drawScope();
@@ -54,7 +52,7 @@
 
   function themeChanged() {
     requestAnimationFrame(function () {
-      P.readTheme(); P.recolorStatic(); P.drawScope();
+      P.readTheme(); P.recolorStatic(); P.drawScope(); P.inspectorRecolor && P.inspectorRecolor();
     });
   }
 
@@ -75,11 +73,11 @@
       P.initLabels(vp);
       P.initPackets();
       P.buildBoxes();
+      P.initInspector(vp);
     } else {
       P.buildLinkScene = P.styleLinkScene = P.buildLabels = P.recolorStatic = function () {};
     }
     P.rebuild(false);
-    P.renderMessage();
     if (!G.failed) {
       var narrow = vp.clientWidth < 760;
       P.flyTo(narrow ? P.framePose(29, 72, 1) : P.framePose(-2, 118, 0.6), 0);
