@@ -50,6 +50,8 @@
       if (act === 'close') P.closeInspector(true);
       else if (act === 'resume') P.setPlaying(true);
       else if (act === 'sym') { symSel = +b.dataset.i; lastSig = ''; }
+      else if (act === 'word') { P.followWord(+b.dataset.i); lastSig = ''; }
+      else if (act === 'unfollow') { P.followWord(null); lastSig = ''; }
       else if (act === 'prev' || act === 'next') stepBlock(act === 'next' ? 1 : -1);
     });
     card.addEventListener('keydown', function (e) {
@@ -147,7 +149,8 @@
     outline.material.color.copy(G.col.ink);
 
     var d = P.describePacket(m);
-    var sig = P.payloadVersion + '|' + d.title + '|' + d.where + '|' + d.state + '|' + S.playing + '|' + symSel + '|' + (d.lane ? d.lane.rxPma + ':' + d.lane.serdes : '');
+    var fwk = P.followed && P.followed();
+    var sig = (fwk ? fwk.s : '') + '|' + P.payloadVersion + '|' + d.title + '|' + d.where + '|' + d.state + '|' + S.playing + '|' + symSel + '|' + (d.lane ? d.lane.rxPma + ':' + d.lane.serdes : '');
     if (sig !== lastSig) { lastSig = sig; card.innerHTML = render(d); }
     place(b);
   };
@@ -165,10 +168,45 @@
     card.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(y) + 'px)';
   }
 
-  function cells(bytes, cls) {
-    return bytes.map(function (c) {
-      return '<span class="cell ' + (cls || '') + (c === 32 ? ' sp' : '') + '"><b>' + esc(P.glyph(c)) + '</b><i>' + P.hex(c, 2) + '</i></span>';
-    }).join('');
+  // One character cell. Word characters are buttons: clicking follows that word.
+  function cell(idx, cls, partial) {
+    var c = P.byteAt(idx), w = P.wordAround(idx), fw = P.followed && P.followed();
+    var on = fw && P.inWord(idx, fw) ? ' fw' : '', k = (cls || '') + (c === 32 ? ' sp' : '') + on + (partial ? ' part' : '');
+    var inner = '<b>' + (c === 32 ? '&nbsp;' : esc(P.glyph(c))) + '</b><i>' + (partial ? partial + '/8' : P.hex(c, 2)) + '</i>';
+    return w ? '<button type="button" class="cell ' + k + '" data-act="word" data-i="' + idx + '" title="Follow \u201C' + esc(w.text) + '\u201D">' + inner + '</button>'
+      : '<span class="cell ' + k + '">' + inner + '</span>';
+  }
+  function cells(start, len, cls) {
+    var h = '';
+    for (var i = 0; i < len; i++) h += cell(start + i, cls);
+    return h;
+  }
+  // Running text with word characters clickable; the followed word is marked.
+  function text(start, len) {
+    var h = '', fw = P.followed && P.followed();
+    for (var i = start; i < start + len; i++) {
+      var c = P.byteAt(i), g = c === 32 ? '<span class="gap"> </span>' : esc(P.glyph(c));
+      h += P.wordAround(i) ? '<span class="wc' + (fw && P.inWord(i, fw) ? ' fw' : '') + '" data-act="word" data-i="' + i + '">' + g + '</span>' : g;
+    }
+    return h;
+  }
+
+  // A PCS lane unit: 20 bits = codeword A symbol + codeword B symbol, drawn
+  // over the characters they came from. Partial characters are faded.
+  function pairRuler(d) {
+    var pr = d.pair;
+    if (pr.parity) return '<p class="ins-note">Parity: symbol ' + pr.j + ' of codeword A and of codeword B, computed by the RS(544,514) encoder. Parity carries no text.</p>';
+    var bitsA = pr.a.bin, bitsB = pr.b.bin, hdr = pr.a.parts[0].kind === 'hdr';
+    var h = '<div class="ruler"><div class="rrow chars">' + (hdr ? '<span class="rc hdrbit" style="flex:1"><b>1</b><i>hdr</i></span>' : '');
+    d.cover.forEach(function (cv) { h += '<span class="rc" style="flex:' + cv.n + '">' + cell(cv.idx, '', cv.n < 8 ? cv.n : 0) + '</span>'; });
+    h += '</div><div class="rrow syms2"><span class="rs a" style="flex:10"><b>' + pr.a.hex + '</b><i>codeword A</i></span>' +
+      '<span class="rs b" style="flex:10"><b>' + pr.b.hex + '</b><i>codeword B</i></span></div>' +
+      '<div class="rrow bits"><span style="flex:10">' + bitsA + '</span><span style="flex:10">' + bitsB + '</span></div></div>';
+    var whole = d.cover.filter(function (cv) { return cv.n === 8; }).length;
+    h += '<p class="ins-note">20 bits, one symbol from each codeword: ' + whole + ' whole character' + (whole === 1 ? '' : 's') +
+      ' plus pieces of ' + (d.cover.length - whole) + ' more. The next 20 bits go to lane ' + ((d.lane.pcs + 1) % 8) +
+      ', so one lane never holds a whole word.</p>';
+    return h;
   }
 
   function symbolLine(s) {
@@ -208,14 +246,14 @@
     if (d.state === 'ambad') h += '<p class="ins-warn">This marker arrives corrupted. Enough bad markers in a row and lane ' + d.lane.pcs + ' loses lock.</p>';
 
     if (d.kind === 'mii' || d.kind === 'b66') {
-      h += '<p class="ins-ascii">' + esc(d.ascii.replace(/ /g, '·')) + '</p><div class="cells">' +
-        (d.kind === 'b66' ? '<span class="cell hdr"><b>01</b><i>sync</i></span>' : '') + cells(d.bytes) + '</div>';
+      h += '<p class="ins-ascii">' + text(d.start, 8) + '</p><div class="cells">' +
+        (d.kind === 'b66' ? '<span class="cell hdr"><b>01</b><i>sync</i></span>' : '') + cells(d.start, 8) + '</div>';
       h += '<p class="ins-note">' + (d.kind === 'mii'
         ? '8 data bytes per transfer. Control characters (preamble, idles, terminate) are left out of this model.'
         : 'Same 8 bytes plus a 2-bit sync header. 01 means the block is all data.') + '</p>';
     } else if (d.kind === 'b257') {
-      h += '<p class="ins-ascii">' + esc(d.ascii.replace(/ /g, '·')) + '</p><div class="cells wrap"><span class="cell hdr"><b>1</b><i>hdr</i></span>' +
-        [0, 1, 2, 3].map(function (g) { return '<span class="grp">' + cells(d.bytes.slice(g * 8, g * 8 + 8), d.scrambled ? 'scr' : '') + '</span>'; }).join('') + '</div>';
+      h += '<p class="ins-ascii">' + text(d.start, 32) + '</p><div class="cells wrap"><span class="cell hdr"><b>1</b><i>hdr</i></span>' +
+        [0, 1, 2, 3].map(function (g) { return '<span class="grp">' + cells(d.start + g * 8, 8, d.scrambled ? 'scr' : '') + '</span>'; }).join('') + '</div>';
       h += '<p class="ins-note">Four 66-bit blocks (' + d.from66[0] + '–' + d.from66[1] + ') packed into one: their four 2-bit headers become a single 1. ' +
         (d.scrambled ? 'This block is <b>scrambled</b>. On the wire the bits look random; the text is shown unscrambled so you can follow it.' : '') + '</p>';
     } else if (d.kind === 'amgroup') {
@@ -227,16 +265,22 @@
           (s.parity ? 'P' : s.hex) + '</button>';
       }).join('') + '</div>';
       if (symSel >= 0) h += symbolLine(d.symbols[symSel]);
-      else if (d.sources.length) h += '<p class="ins-src">Holds bits of: <code>' + esc(d.sources.map(function (s) { return P.glyph(s.ch); }).join('')) + '</code>. Click a symbol to see which.</p>';
+      else if (d.sources.length) h += '<p class="ins-src">Holds bits of: <span class="ins-ascii sm">' + text(d.sources[0].idx, d.sources[d.sources.length - 1].idx - d.sources[0].idx + 1) + '</span> Click a symbol to see which bits.</p>';
       if (d.parityCount) h += '<p class="ins-note">P = parity symbols added by the RS(544,514) encoder.</p>';
-    } else if (d.kind === 'sym') {
-      h += symbolLine(d.symbol);
-      if (!d.symbol.parity) h += '<p class="ins-note">Symbol ' + d.symbol.j + ' of codeword ' + (d.symbol.w ? 'B' : 'A') + ' (pair ' + d.symbol.cw + '). ' +
-        'A PCS lane carries 10-bit symbols, not characters.</p>';
+    } else if (d.kind === 'pair') {
+      h += pairRuler(d);
     } else if (d.kind === 'am') {
       h += '<p class="ins-note">The alignment marker for PCS lane ' + d.lane.pcs + '. The receiver finds it by its common bytes and reads the lane number from its unique bytes. That is how lane identity survives the trip.</p>';
     }
 
+    var fw = P.followed && P.followed();
+    if (fw) {
+      var part = d.cover ? P.wordPart(d.cover, fw) : '';
+      h += '<p class="ins-follow">Following <b>\u201C' + esc(fw.text) + '\u201D</b>' + (part ? ': this block holds <b>' + esc(part) + '</b>' : ': not in this block') +
+        ' <button type="button" class="linkbtn" data-act="unfollow">Stop</button></p>';
+    } else if (d.kind !== 'amgroup' && d.kind !== 'am' && !(d.pair && d.pair.parity)) {
+      h += '<p class="ins-hint">Click a word to light up every block that carries it.</p>';
+    }
     if (d.lane) {
       var L = d.lane;
       h += '<p class="ins-path"><span class="sw l' + L.pcs + '"></span>PCS ' + L.pcs + ' → SerDes ' + L.serdes +

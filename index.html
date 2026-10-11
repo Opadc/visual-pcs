@@ -251,10 +251,12 @@ input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offs
   position: absolute; left: 0; top: 0; z-index: 5; width: min(23rem, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto;
   background: var(--panel); color: var(--ink); border: 1px solid var(--ink); border-radius: var(--radius);
   box-shadow: 0 6px 24px color-mix(in srgb, var(--ink) 18%, transparent);
-  font-family: var(--f-display); font-size: var(--s-0); display: grid;
+  font-family: var(--f-display); font-size: var(--s-0); display: flex; flex-direction: column;
 }
 .inspector.docked { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 62%; transform: none; }
-.ins-head { display: flex; justify-content: space-between; gap: 8px; align-items: start; padding: 9px 10px 7px 12px; border-bottom: 1px solid var(--rule-2); }
+.ins-head { display: flex; justify-content: space-between; gap: 8px; align-items: start; padding: 9px 10px 7px 12px; border-bottom: 1px solid var(--rule-2);
+  position: sticky; top: 0; z-index: 1; background: var(--panel); flex: none; }
+.ins-body, .ins-foot { flex: none; }
 .ins-head h4 { font-size: 0.95rem; font-stretch: 92%; }
 .ins-side { font-family: var(--f-mono); font-size: 0.64rem; letter-spacing: 0.04em; color: var(--muted); display: block; margin-bottom: 2px; }
 .ins-x { border: 0; background: none; font-size: 1.3rem; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 4px; min-width: 32px; min-height: 32px; }
@@ -288,10 +290,53 @@ input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offs
 .ins-src .c0, .ins-src .c1, .ins-src .c2 { border-bottom: 2px solid; }
 .ins-foot { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 12px 10px; border-top: 1px solid var(--rule-2); }
 .ins-foot .btn { min-height: 30px; padding: 2px 9px; font-size: 0.78rem; }
-@media (max-width: 560px) { .vp-click { bottom: 34px; } }
 .ins-ctx { font-size: 0.78rem; color: var(--muted); }
 .ins-ctx code { font-family: var(--f-mono); font-size: 0.86rem; color: var(--ink-2); letter-spacing: 0.03em; }
 .ins-ctx mark { background: none; color: var(--ink); font-weight: 700; border-bottom: 3px solid; }
+
+.follow-tags { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+.ftag {
+  position: absolute; left: 0; top: 0; white-space: pre; font-family: var(--f-mono); font-size: 11px; font-weight: 700; line-height: 1.3;
+  color: var(--ink); background: color-mix(in srgb, var(--am) 30%, var(--panel)); border: 1px solid var(--am); border-bottom: 3px solid var(--lc, var(--am));
+  border-radius: 3px; padding: 0 4px;
+}
+.follow-bar {
+  position: absolute; left: 50%; top: 40px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+  max-width: calc(100% - 20px); font-family: var(--f-display); font-size: var(--s-0); color: var(--ink);
+  background: var(--panel); border: 1px solid var(--am); border-radius: var(--radius); padding: 4px 6px 4px 12px;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.follow-bar #follow-where { font-family: var(--f-mono); font-size: 0.72rem; color: var(--muted); }
+.follow-bar .btn { min-height: 28px; padding: 2px 9px; font-size: 0.78rem; }
+.ins-ascii .gap { display: inline-block; width: 0.55em; }
+.ins-ascii .wc { cursor: pointer; border-radius: 2px; }
+.ins-ascii .wc:hover { background: color-mix(in srgb, var(--am) 22%, transparent); }
+.ins-ascii .wc.fw, .cell.fw { background: color-mix(in srgb, var(--am) 40%, var(--panel)); }
+.ins-ascii.sm { font-size: 0.86rem; display: inline; }
+button.cell { border: 0; cursor: pointer; color: inherit; font: inherit; }
+button.cell:hover { outline: 1px solid var(--am); }
+.cell.part { opacity: 0.55; }
+.ruler { display: grid; gap: 2px; font-family: var(--f-mono); }
+.rrow { display: flex; gap: 2px; }
+.rrow > span { min-width: 0; }
+.rc .cell { width: 100%; min-width: 0; }
+.rc.hdrbit { display: grid; justify-items: center; background: var(--ink); color: var(--paper); border-radius: 2px; font-size: 0.6rem; padding: 2px 0; }
+.rc.hdrbit b { font-size: 0.8rem; } .rc.hdrbit i { font-style: normal; }
+.rs { display: grid; justify-items: center; padding: 3px 0; border-radius: 2px; color: var(--paper); }
+.rs b { font-size: 0.86rem; } .rs i { font-style: normal; font-size: 0.6rem; opacity: 0.85; }
+.rs.a { background: var(--cw-a); } .rs.b { background: var(--cw-b); color: var(--ink); }
+.rrow.bits span { text-align: center; font-size: 0.66rem; letter-spacing: 0.08em; color: var(--muted); }
+.ins-follow { font-size: 0.8rem; padding: 5px 8px; border-radius: 3px; background: color-mix(in srgb, var(--am) 16%, transparent); }
+.ins-hint { font-size: 0.74rem; color: var(--muted); }
+.linkbtn { border: 0; background: none; color: var(--ink); text-decoration: underline; cursor: pointer; font: inherit; padding: 0 2px; }
+.ftag s { text-decoration: none; opacity: 0.35; font-weight: 500; }
+
+@media (max-width: 560px) {
+  .vp-click { bottom: 34px; }
+  .follow-bar { top: auto; height: auto; align-items: center; bottom: 58px; gap: 6px; padding: 3px 4px 3px 9px; font-size: 0.78rem; flex-wrap: nowrap; }
+  .follow-bar #follow-where { display: none; }
+  .follow-bar > span, .follow-bar .btn { white-space: nowrap; }
+}
 
 .panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 18px; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px 16px; min-width: 0; display: grid; gap: 12px; align-content: start; }
@@ -545,6 +590,8 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     </div>
     <p id="lab-hint" class="lab-hint" hidden></p>
     <p class="vp-click" id="vp-click">Click any block to see what it carries</p>
+    <div class="follow-bar" id="follow-bar" hidden><span>Following <b></b></span><span id="follow-where"></span>
+      <button type="button" class="btn" id="follow-stop">Stop following</button></div>
     <p class="vp-help" id="vp-help">Drag to pan · right-drag to rotate · Ctrl + scroll to zoom</p>
     <noscript><p class="noscript">The lane lab needs JavaScript and WebGL.</p></noscript>
   </div>
@@ -980,7 +1027,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 (function (P) {
   'use strict';
 
-  P.PAYLOAD_DEFAULT = 'Call me Ishmael. Some years ago--never mind how long precisely--having little or no ' +
+  P.PAYLOAD_DEFAULT = 'Call me Ishmael. Some years ago, never mind how long precisely, having little or no ' +
     'money in my purse, and nothing particular to interest me on shore, I thought I would sail about a ' +
     'little and see the watery part of the world. ';
   P.PAYLOAD_SOURCE = 'Herman Melville, Moby-Dick (1851)';
@@ -989,6 +1036,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   P.CW_K = 514;                       // data symbols per codeword
   P.PAIR_BLOCKS = 40;                 // 2 x 514 x 10 bits = 40 x 257-bit blocks
   P.LANE_SYM_PER_PAIR = 2 * P.CW_N / P.N_PCS;   // 136 symbols per PCS lane per codeword pair
+  P.LANE_PAIRS = P.CW_N / P.N_PCS;              // 68 A+B symbol pairs per PCS lane per codeword pair
   P.CHUNK = 32;                       // symbols per codeword cube in the scene
   P.CHUNKS = Math.ceil(P.CW_N / P.CHUNK);       // 17 cubes per codeword; the last holds the parity
 
@@ -1056,15 +1104,18 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     return n - Math.floor(n / P.AM_PERIOD) - 1;
   };
 
-  // Symbol d on PCS lane p. Simplified distribution: each lane takes one symbol
-  // from codeword A, then one from codeword B, in round-robin lane order.
-  P.laneSymbolId = function (p, d) {
-    var cw = Math.floor(d / P.LANE_SYM_PER_PAIR), e = d - cw * P.LANE_SYM_PER_PAIR;
-    return { cw: cw, w: e & 1, j: (e >> 1) * P.N_PCS + p };
+  // Unit d on PCS lane p is one A+B symbol pair. Symbol distribution deals
+  // pairs round-robin: pair j of the codeword pair goes to lane j mod 8. A_j
+  // and B_j are stream symbols 2j and 2j+1, so a pair is 20 adjacent stream
+  // bits, about 2.5 characters.
+  P.lanePairId = function (p, d) {
+    var cw = Math.floor(d / P.LANE_PAIRS);
+    return { cw: cw, j: (d - cw * P.LANE_PAIRS) * P.N_PCS + p };
   };
-  P.laneSymbol = function (p, d) {
-    var id = P.laneSymbolId(p, d);
-    return P.cwSymbol(id.cw, id.w, id.j);
+  P.lanePair = function (p, d) {
+    var id = P.lanePairId(p, d);
+    return { cw: id.cw, j: id.j, parity: id.j >= P.CW_K,
+             a: P.cwSymbol(id.cw, 0, id.j), b: P.cwSymbol(id.cw, 1, id.j) };
   };
 
   // Codeword cube n of row w covers symbols CHUNK*c .. CHUNK*c+31 of codeword w in pair cw.
@@ -1073,9 +1124,78 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     return { cw: cw, c: n - cw * P.CHUNKS };
   };
 
+  // Bytes whose bits fall in stream bits [b0, b0 + n): [{ idx, n }], in order.
+  function coverBits(b0, n, out) {
+    for (var b = b0; b < b0 + n; b++) {
+      var s = streamBit(b);
+      if (s.src !== 'b') continue;
+      var last = out[out.length - 1];
+      if (last && last.idx === s.idx) last.n++;
+      else out.push({ idx: s.idx, n: 1 });
+    }
+    return out;
+  }
+  function symBits(cw, w, j) { return (cw * 2 * P.CW_K + 2 * j + w) * 10; }
+
+  // Which characters each kind of block carries, as absolute byte indices.
+  var memo = new Map(), memoVer = -1;
+  function cached(key, fn) {
+    if (memoVer !== P.payloadVersion) { memo.clear(); memoVer = P.payloadVersion; }
+    var v = memo.get(key);
+    if (!v) { v = fn(); if (memo.size > 6000) memo.clear(); memo.set(key, v); }
+    return v;
+  }
+  function whole(start, len) {
+    var out = [];
+    for (var i = 0; i < len; i++) out.push({ idx: start + i, n: 8 });
+    return out;
+  }
+  P.coverG66 = function (n) { return whole(8 * n, 8); };
+  P.coverG257 = function (m) { return whole(32 * m, 32); };
+  P.coverChunk = function (cw, w, c) {
+    return cached('c' + cw + ':' + w + ':' + c, function () {
+      var out = [];
+      for (var j = c * P.CHUNK; j < Math.min((c + 1) * P.CHUNK, P.CW_K); j++) coverBits(symBits(cw, w, j), 10, out);
+      return out;
+    });
+  };
+  P.coverLanePair = function (p, d) {
+    var id = P.lanePairId(p, d);
+    if (id.j >= P.CW_K) return [];
+    return cached('l' + id.cw + ':' + id.j, function () { return coverBits(symBits(id.cw, 0, id.j), 20, []); });
+  };
+
+  // The word around byte i, in passage offsets (the passage repeats).
+  function isWordChar(c) { return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 39; }
+  P.passageLength = function () { return bytes.length; };
+  P.wordAround = function (i) {
+    var L = bytes.length, k = mod(i, L);
+    if (!isWordChar(bytes[k])) return null;
+    var s = k, e = k + 1;
+    while (s > 0 && isWordChar(bytes[s - 1])) s--;
+    while (e < L && isWordChar(bytes[e])) e++;
+    return { s: s, e: e, text: String.fromCharCode.apply(null, bytes.slice(s, e)) };
+  };
+  P.inWord = function (i, w) { var k = mod(i, bytes.length); return k >= w.s && k < w.e; };
+  // Characters of word w present in a cover list, e.g. 'Ish'. '' if none.
+  // The same, as a mask over the word: which letters this block holds bits of.
+  P.wordMask = function (cover, w) {
+    var L = bytes.length, has = new Array(w.e - w.s).fill(false), any = false;
+    for (var i = 0; i < cover.length; i++) {
+      if (!P.inWord(cover[i].idx, w)) continue;
+      has[mod(cover[i].idx, L) - w.s] = true; any = true;
+    }
+    return any ? has : null;
+  };
+  P.wordPart = function (cover, w) {
+    var s = '';
+    for (var i = 0; i < cover.length; i++) if (P.inWord(cover[i].idx, w)) s += String.fromCharCode(P.byteAt(cover[i].idx));
+    return s;
+  };
+
   P.hex = function (v, digits) { return v.toString(16).toUpperCase().padStart(digits, '0'); };
   P.bin = function (v, n) { return v.toString(2).padStart(n, '0'); };
-  P.glyph = function (b) { return b === 32 ? '·' : String.fromCharCode(b); };
+  P.glyph = function (b) { return String.fromCharCode(b); };
 })(globalThis.PCS = globalThis.PCS || {});
 
 /* ---- state.js ---- */
@@ -1602,7 +1722,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   var m4 = new T.Matrix4(), q = new T.Quaternion(), v = new T.Vector3(), sc = new T.Vector3();
   var c = new T.Color(), tmp = new T.Color();
   var count = 0;
-  var meta = new Array(MAX), boxes = new Float32Array(MAX * 6);
+  var meta = new Array(MAX), boxes = new Float32Array(MAX * 6), hits = [];
 
   P.initPackets = function () {
     var geo = new T.BoxGeometry(1, 1, 1);
@@ -1616,6 +1736,14 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 
   function put(x, y, z, sx, sy, sz, col, id) {
     if (count >= MAX) return;
+    if (P.followed && P.followed()) {
+      var part = P.followPart(id);
+      if (part) {
+        hits.push({ i: count, part: part.key, html: part.html, key: part.key, span: part.span, lane: id.fam === 'lane' ? id.p : -1, x: x });
+        col.lerp(G.col.am, 0.55);
+        sy *= 1.35; sz *= 1.25; z += 0.25;
+      } else col.lerp(G.col.paper, 0.78);
+    }
     v.set(x, y, z); sc.set(sx, sy, sz);
     m4.compose(v, q, sc);
     G.inst.setMatrixAt(count, m4);
@@ -1730,13 +1858,15 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   }
 
   P.drawPackets = function () {
-    count = 0;
+    count = 0; hits.length = 0;
     drawAggregate();
     drawLanes();
     G.inst.count = count;
     G.inst.instanceMatrix.needsUpdate = true;
     if (G.inst.instanceColor) G.inst.instanceColor.needsUpdate = true;
   };
+
+  P.followHits = function () { return hits; };
 
   // Picking support for the inspector.
   P.packetCount = function () { return count; };
@@ -1924,6 +2054,23 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     };
   }
 
+  // Characters a drawn block carries (absolute byte indices), or null for blocks without text.
+  P.coverOf = function (m) {
+    if (!m) return null;
+    if (m.fam === 'g66') return P.coverG66(m.n);
+    if (m.fam === 'g257') return P.coverG257(m.n);
+    if (m.fam === 'row') {
+      if (m.n < 0) return null;
+      var id = P.chunkId(m.n);
+      return P.coverChunk(id.cw, m.row, id.c);
+    }
+    if (m.fam === 'lane') {
+      var d = P.laneDataIndex(m.n);
+      return d < 0 ? null : P.coverLanePair(m.p, d);
+    }
+    return null;
+  };
+
   P.describePacket = function (m) {
     if (!m) return null;
     var S = P.state, where = stageAt(m.x), seg = m.seg != null ? P.SEGS[m.seg] : null;
@@ -1935,7 +2082,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       out.kind = seg.kind === 'mii' ? 'mii' : 'b66';
       out.title = seg.kind === 'mii' ? '200GMII transfer ' + m.n : '66-bit block ' + m.n;
       out.bytes = b.bytes; out.ascii = chars(b.bytes); out.hex = hexBytes(b.bytes);
-      out.hdr = b.hdr; out.readable = true;
+      out.hdr = b.hdr; out.readable = true; out.start = 8 * m.n; out.cover = P.coverG66(m.n);
       return out;
     }
     if (m.fam === 'amg') {
@@ -1947,7 +2094,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       var blk = P.block257(m.n);
       out.kind = 'b257'; out.title = '257-bit block ' + m.n;
       out.bytes = blk.bytes; out.ascii = chars(blk.bytes); out.hex = hexBytes(blk.bytes);
-      out.hdr = blk.hdr; out.from66 = [blk.first66, blk.first66 + 3];
+      out.hdr = blk.hdr; out.from66 = [blk.first66, blk.first66 + 3]; out.start = 32 * m.n; out.cover = P.coverG257(m.n);
       out.scrambled = !!seg.scr; out.readable = true;
       return out;
     }
@@ -1960,6 +2107,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       out.symbols = syms.map(symbolInfo);
       out.parityCount = syms.filter(function (s) { return s.parity; }).length;
       out.sources = sourcesOf(syms);
+      out.cover = P.coverChunk(id.cw, w, id.c);
       return out;
     }
     if (m.fam === 'lane') {
@@ -1969,11 +2117,11 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
         out.kind = 'am'; out.title = 'Alignment marker, PCS lane ' + m.p; out.readable = false;
         return out;
       }
-      var s = P.laneSymbol(m.p, d);
-      out.kind = 'sym'; out.readable = false;
-      out.title = 'PCS lane ' + m.p + ', symbol ' + d;
-      out.symbol = symbolInfo(s);
-      out.sources = sourcesOf([s]);
+      var pr = P.lanePair(m.p, d);
+      out.kind = 'pair'; out.readable = false;
+      out.title = 'PCS lane ' + m.p + ', unit ' + d;
+      out.pair = { cw: pr.cw, j: pr.j, parity: pr.parity, a: symbolInfo(pr.a), b: symbolInfo(pr.b) };
+      out.cover = P.coverLanePair(m.p, d);
       return out;
     }
     return null;
@@ -2033,6 +2181,8 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       if (act === 'close') P.closeInspector(true);
       else if (act === 'resume') P.setPlaying(true);
       else if (act === 'sym') { symSel = +b.dataset.i; lastSig = ''; }
+      else if (act === 'word') { P.followWord(+b.dataset.i); lastSig = ''; }
+      else if (act === 'unfollow') { P.followWord(null); lastSig = ''; }
       else if (act === 'prev' || act === 'next') stepBlock(act === 'next' ? 1 : -1);
     });
     card.addEventListener('keydown', function (e) {
@@ -2130,7 +2280,8 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     outline.material.color.copy(G.col.ink);
 
     var d = P.describePacket(m);
-    var sig = P.payloadVersion + '|' + d.title + '|' + d.where + '|' + d.state + '|' + S.playing + '|' + symSel + '|' + (d.lane ? d.lane.rxPma + ':' + d.lane.serdes : '');
+    var fwk = P.followed && P.followed();
+    var sig = (fwk ? fwk.s : '') + '|' + P.payloadVersion + '|' + d.title + '|' + d.where + '|' + d.state + '|' + S.playing + '|' + symSel + '|' + (d.lane ? d.lane.rxPma + ':' + d.lane.serdes : '');
     if (sig !== lastSig) { lastSig = sig; card.innerHTML = render(d); }
     place(b);
   };
@@ -2148,10 +2299,45 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     card.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(y) + 'px)';
   }
 
-  function cells(bytes, cls) {
-    return bytes.map(function (c) {
-      return '<span class="cell ' + (cls || '') + (c === 32 ? ' sp' : '') + '"><b>' + esc(P.glyph(c)) + '</b><i>' + P.hex(c, 2) + '</i></span>';
-    }).join('');
+  // One character cell. Word characters are buttons: clicking follows that word.
+  function cell(idx, cls, partial) {
+    var c = P.byteAt(idx), w = P.wordAround(idx), fw = P.followed && P.followed();
+    var on = fw && P.inWord(idx, fw) ? ' fw' : '', k = (cls || '') + (c === 32 ? ' sp' : '') + on + (partial ? ' part' : '');
+    var inner = '<b>' + (c === 32 ? '&nbsp;' : esc(P.glyph(c))) + '</b><i>' + (partial ? partial + '/8' : P.hex(c, 2)) + '</i>';
+    return w ? '<button type="button" class="cell ' + k + '" data-act="word" data-i="' + idx + '" title="Follow \u201C' + esc(w.text) + '\u201D">' + inner + '</button>'
+      : '<span class="cell ' + k + '">' + inner + '</span>';
+  }
+  function cells(start, len, cls) {
+    var h = '';
+    for (var i = 0; i < len; i++) h += cell(start + i, cls);
+    return h;
+  }
+  // Running text with word characters clickable; the followed word is marked.
+  function text(start, len) {
+    var h = '', fw = P.followed && P.followed();
+    for (var i = start; i < start + len; i++) {
+      var c = P.byteAt(i), g = c === 32 ? '<span class="gap"> </span>' : esc(P.glyph(c));
+      h += P.wordAround(i) ? '<span class="wc' + (fw && P.inWord(i, fw) ? ' fw' : '') + '" data-act="word" data-i="' + i + '">' + g + '</span>' : g;
+    }
+    return h;
+  }
+
+  // A PCS lane unit: 20 bits = codeword A symbol + codeword B symbol, drawn
+  // over the characters they came from. Partial characters are faded.
+  function pairRuler(d) {
+    var pr = d.pair;
+    if (pr.parity) return '<p class="ins-note">Parity: symbol ' + pr.j + ' of codeword A and of codeword B, computed by the RS(544,514) encoder. Parity carries no text.</p>';
+    var bitsA = pr.a.bin, bitsB = pr.b.bin, hdr = pr.a.parts[0].kind === 'hdr';
+    var h = '<div class="ruler"><div class="rrow chars">' + (hdr ? '<span class="rc hdrbit" style="flex:1"><b>1</b><i>hdr</i></span>' : '');
+    d.cover.forEach(function (cv) { h += '<span class="rc" style="flex:' + cv.n + '">' + cell(cv.idx, '', cv.n < 8 ? cv.n : 0) + '</span>'; });
+    h += '</div><div class="rrow syms2"><span class="rs a" style="flex:10"><b>' + pr.a.hex + '</b><i>codeword A</i></span>' +
+      '<span class="rs b" style="flex:10"><b>' + pr.b.hex + '</b><i>codeword B</i></span></div>' +
+      '<div class="rrow bits"><span style="flex:10">' + bitsA + '</span><span style="flex:10">' + bitsB + '</span></div></div>';
+    var whole = d.cover.filter(function (cv) { return cv.n === 8; }).length;
+    h += '<p class="ins-note">20 bits, one symbol from each codeword: ' + whole + ' whole character' + (whole === 1 ? '' : 's') +
+      ' plus pieces of ' + (d.cover.length - whole) + ' more. The next 20 bits go to lane ' + ((d.lane.pcs + 1) % 8) +
+      ', so one lane never holds a whole word.</p>';
+    return h;
   }
 
   function symbolLine(s) {
@@ -2191,14 +2377,14 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     if (d.state === 'ambad') h += '<p class="ins-warn">This marker arrives corrupted. Enough bad markers in a row and lane ' + d.lane.pcs + ' loses lock.</p>';
 
     if (d.kind === 'mii' || d.kind === 'b66') {
-      h += '<p class="ins-ascii">' + esc(d.ascii.replace(/ /g, '·')) + '</p><div class="cells">' +
-        (d.kind === 'b66' ? '<span class="cell hdr"><b>01</b><i>sync</i></span>' : '') + cells(d.bytes) + '</div>';
+      h += '<p class="ins-ascii">' + text(d.start, 8) + '</p><div class="cells">' +
+        (d.kind === 'b66' ? '<span class="cell hdr"><b>01</b><i>sync</i></span>' : '') + cells(d.start, 8) + '</div>';
       h += '<p class="ins-note">' + (d.kind === 'mii'
         ? '8 data bytes per transfer. Control characters (preamble, idles, terminate) are left out of this model.'
         : 'Same 8 bytes plus a 2-bit sync header. 01 means the block is all data.') + '</p>';
     } else if (d.kind === 'b257') {
-      h += '<p class="ins-ascii">' + esc(d.ascii.replace(/ /g, '·')) + '</p><div class="cells wrap"><span class="cell hdr"><b>1</b><i>hdr</i></span>' +
-        [0, 1, 2, 3].map(function (g) { return '<span class="grp">' + cells(d.bytes.slice(g * 8, g * 8 + 8), d.scrambled ? 'scr' : '') + '</span>'; }).join('') + '</div>';
+      h += '<p class="ins-ascii">' + text(d.start, 32) + '</p><div class="cells wrap"><span class="cell hdr"><b>1</b><i>hdr</i></span>' +
+        [0, 1, 2, 3].map(function (g) { return '<span class="grp">' + cells(d.start + g * 8, 8, d.scrambled ? 'scr' : '') + '</span>'; }).join('') + '</div>';
       h += '<p class="ins-note">Four 66-bit blocks (' + d.from66[0] + '–' + d.from66[1] + ') packed into one: their four 2-bit headers become a single 1. ' +
         (d.scrambled ? 'This block is <b>scrambled</b>. On the wire the bits look random; the text is shown unscrambled so you can follow it.' : '') + '</p>';
     } else if (d.kind === 'amgroup') {
@@ -2210,16 +2396,22 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
           (s.parity ? 'P' : s.hex) + '</button>';
       }).join('') + '</div>';
       if (symSel >= 0) h += symbolLine(d.symbols[symSel]);
-      else if (d.sources.length) h += '<p class="ins-src">Holds bits of: <code>' + esc(d.sources.map(function (s) { return P.glyph(s.ch); }).join('')) + '</code>. Click a symbol to see which.</p>';
+      else if (d.sources.length) h += '<p class="ins-src">Holds bits of: <span class="ins-ascii sm">' + text(d.sources[0].idx, d.sources[d.sources.length - 1].idx - d.sources[0].idx + 1) + '</span> Click a symbol to see which bits.</p>';
       if (d.parityCount) h += '<p class="ins-note">P = parity symbols added by the RS(544,514) encoder.</p>';
-    } else if (d.kind === 'sym') {
-      h += symbolLine(d.symbol);
-      if (!d.symbol.parity) h += '<p class="ins-note">Symbol ' + d.symbol.j + ' of codeword ' + (d.symbol.w ? 'B' : 'A') + ' (pair ' + d.symbol.cw + '). ' +
-        'A PCS lane carries 10-bit symbols, not characters.</p>';
+    } else if (d.kind === 'pair') {
+      h += pairRuler(d);
     } else if (d.kind === 'am') {
       h += '<p class="ins-note">The alignment marker for PCS lane ' + d.lane.pcs + '. The receiver finds it by its common bytes and reads the lane number from its unique bytes. That is how lane identity survives the trip.</p>';
     }
 
+    var fw = P.followed && P.followed();
+    if (fw) {
+      var part = d.cover ? P.wordPart(d.cover, fw) : '';
+      h += '<p class="ins-follow">Following <b>\u201C' + esc(fw.text) + '\u201D</b>' + (part ? ': this block holds <b>' + esc(part) + '</b>' : ': not in this block') +
+        ' <button type="button" class="linkbtn" data-act="unfollow">Stop</button></p>';
+    } else if (d.kind !== 'amgroup' && d.kind !== 'am' && !(d.pair && d.pair.parity)) {
+      h += '<p class="ins-hint">Click a word to light up every block that carries it.</p>';
+    }
     if (d.lane) {
       var L = d.lane;
       h += '<p class="ins-path"><span class="sw l' + L.pcs + '"></span>PCS ' + L.pcs + ' → SerDes ' + L.serdes +
@@ -2230,6 +2422,98 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       (S.playing ? '' : '<button type="button" class="btn" data-act="resume">Resume and follow</button>') + '</footer>';
     return h;
   }
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- follow.js ---- */
+/* Follow a word through the pipeline. Every drawn block that carries any of the
+   word's characters is highlighted, the rest of the scene fades, and floating
+   tags show which piece of the word each block holds ("Is", "shma", "ael"). */
+(function (P) {
+  'use strict';
+  var T = window.THREE, G = P.g, S = P.state;
+  var word = null, tags = [], tagHost = null, v = new T.Vector3();
+  var MAX_TAGS = 48;
+
+  P.followed = function () { return word; };
+
+  // Follow the word containing byte i, or stop with null. Following the same word again stops.
+  P.followWord = function (i) {
+    var w = i == null ? null : P.wordAround(i);
+    if (w && word && w.s === word.s) w = null;
+    word = w;
+    var bar = document.getElementById('follow-bar');
+    if (bar) {
+      bar.hidden = !word;
+      if (word) bar.querySelector('b').textContent = '“' + word.text + '”';
+    }
+    if (tagHost) tagHost.hidden = !word;
+    P.emit('follow');
+  };
+
+  P.initFollow = function (host) {
+    tagHost = document.createElement('div');
+    tagHost.className = 'follow-tags';
+    tagHost.setAttribute('aria-hidden', 'true');
+    tagHost.hidden = true;
+    host.appendChild(tagHost);
+    for (var i = 0; i < MAX_TAGS; i++) {
+      var el = document.createElement('span');
+      el.className = 'ftag';
+      el.style.visibility = 'hidden';
+      tagHost.appendChild(el);
+      tags.push({ el: el, text: '', shown: false });
+    }
+    var stop = document.getElementById('follow-stop');
+    if (stop) stop.onclick = function () { P.followWord(null); };
+    P.on(function (what) { if (what === 'payload' && word) P.followWord(null); });
+  };
+
+  // Called by packets.js for each block: returns a tag for the part of the word
+  // it holds, or null. Letters between the first and last held letter that the
+  // block has no bits of are shown faded, so 'wat?ey' reads as 'watery'.
+  P.followPart = function (m) {
+    if (!word) return null;
+    var cover = P.coverOf(m), mask = cover && P.wordMask(cover, word);
+    if (!mask) return null;
+    var a = mask.indexOf(true), b = mask.lastIndexOf(true), html = '', key = '';
+    for (var i = a; i <= b; i++) {
+      var ch = word.text[i];
+      html += mask[i] ? ch : '<s>' + ch + '</s>';
+      key += mask[i] ? ch : '_';
+    }
+    return { html: html, key: key, span: b - a + 1 };
+  };
+
+  // Place tags over highlighted blocks (after drawPackets, every frame).
+  P.updateFollowTags = function () {
+    if (!word || !tagHost) return;
+    var W = G.w, H = G.h, used = 0, placed = [];
+    var hits = P.followHits();
+    for (var h = 0; h < hits.length && used < MAX_TAGS; h++) {
+      var b = P.packetBox(hits[h].i);
+      v.set(b[0], b[1] + b[4] / 2 + 0.35, b[2]).project(G.camera);
+      if (v.z > 1) continue;
+      var sx = (v.x + 1) / 2 * W, sy = (1 - v.y) / 2 * H;
+      if (sx < 0 || sx > W || sy < 0 || sy > H) continue;
+      var tw = 7 * hits[h].span + 10, r = { x0: sx - tw / 2, x1: sx + tw / 2, y0: sy - 16, y1: sy };
+      if (placed.some(function (q) { return r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0; })) continue;
+      placed.push(r);
+      var t = tags[used++];
+      if (t.text !== hits[h].key) { t.el.innerHTML = hits[h].html; t.text = hits[h].key; }
+      t.el.className = 'ftag' + (hits[h].lane >= 0 ? ' l' + hits[h].lane : '');
+      t.el.style.transform = 'translate(' + Math.round(sx) + 'px,' + Math.round(sy) + 'px) translate(-50%, -100%)';
+      if (!t.shown) { t.el.style.visibility = 'visible'; t.shown = true; }
+    }
+    for (var k = used; k < MAX_TAGS; k++) if (tags[k].shown) { tags[k].el.style.visibility = 'hidden'; tags[k].shown = false; }
+  };
+
+  P.followStatus = function () {
+    if (!word) return '';
+    var lanes = {}, n = 0;
+    P.followHits().forEach(function (h) { if (h.lane >= 0) { lanes[h.lane] = 1; n++; } });
+    var ls = Object.keys(lanes);
+    return ls.length ? 'on PCS lane' + (ls.length > 1 ? 's ' : ' ') + ls.join(', ') : '';
+  };
 })(globalThis.PCS = globalThis.PCS || {});
 
 /* ---- ui-controls.js ---- */
@@ -2338,7 +2622,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     mi.value = P.PAYLOAD_DEFAULT.trim();
     mi.placeholder = P.PAYLOAD_SOURCE;
     mi.title = P.PAYLOAD_SOURCE;
-    mi.addEventListener('input', function () { P.setPayload(mi.value ? mi.value + ' ' : ''); });
+    mi.addEventListener('input', function () { P.setPayload(mi.value ? mi.value + ' ' : ''); P.emit('payload'); });
     $('btn-play').onclick = function () { P.setPlaying(!S.playing); };
     $('btn-step').onclick = P.step;
     $('sel-speed').onchange = function (e) { S.speed = +e.target.value; };
@@ -2888,6 +3172,8 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     P.drawPackets();
     P.updateCamera(now);
     P.updateInspector();
+    P.updateFollowTags();
+    if (P.followed()) { var fwEl = document.getElementById('follow-where'), st = P.followStatus(); if (fwEl.textContent !== st) fwEl.textContent = st; }
     G.renderer.render(G.scene, G.camera);
     P.updateLabels();
     P.drawScope();
@@ -2917,6 +3203,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       P.initPackets();
       P.buildBoxes();
       P.initInspector(vp);
+      P.initFollow(vp);
     } else {
       P.buildLinkScene = P.styleLinkScene = P.buildLabels = P.recolorStatic = function () {};
     }

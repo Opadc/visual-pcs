@@ -44,6 +44,23 @@
     };
   }
 
+  // Characters a drawn block carries (absolute byte indices), or null for blocks without text.
+  P.coverOf = function (m) {
+    if (!m) return null;
+    if (m.fam === 'g66') return P.coverG66(m.n);
+    if (m.fam === 'g257') return P.coverG257(m.n);
+    if (m.fam === 'row') {
+      if (m.n < 0) return null;
+      var id = P.chunkId(m.n);
+      return P.coverChunk(id.cw, m.row, id.c);
+    }
+    if (m.fam === 'lane') {
+      var d = P.laneDataIndex(m.n);
+      return d < 0 ? null : P.coverLanePair(m.p, d);
+    }
+    return null;
+  };
+
   P.describePacket = function (m) {
     if (!m) return null;
     var S = P.state, where = stageAt(m.x), seg = m.seg != null ? P.SEGS[m.seg] : null;
@@ -55,7 +72,7 @@
       out.kind = seg.kind === 'mii' ? 'mii' : 'b66';
       out.title = seg.kind === 'mii' ? '200GMII transfer ' + m.n : '66-bit block ' + m.n;
       out.bytes = b.bytes; out.ascii = chars(b.bytes); out.hex = hexBytes(b.bytes);
-      out.hdr = b.hdr; out.readable = true;
+      out.hdr = b.hdr; out.readable = true; out.start = 8 * m.n; out.cover = P.coverG66(m.n);
       return out;
     }
     if (m.fam === 'amg') {
@@ -67,7 +84,7 @@
       var blk = P.block257(m.n);
       out.kind = 'b257'; out.title = '257-bit block ' + m.n;
       out.bytes = blk.bytes; out.ascii = chars(blk.bytes); out.hex = hexBytes(blk.bytes);
-      out.hdr = blk.hdr; out.from66 = [blk.first66, blk.first66 + 3];
+      out.hdr = blk.hdr; out.from66 = [blk.first66, blk.first66 + 3]; out.start = 32 * m.n; out.cover = P.coverG257(m.n);
       out.scrambled = !!seg.scr; out.readable = true;
       return out;
     }
@@ -80,6 +97,7 @@
       out.symbols = syms.map(symbolInfo);
       out.parityCount = syms.filter(function (s) { return s.parity; }).length;
       out.sources = sourcesOf(syms);
+      out.cover = P.coverChunk(id.cw, w, id.c);
       return out;
     }
     if (m.fam === 'lane') {
@@ -89,11 +107,11 @@
         out.kind = 'am'; out.title = 'Alignment marker, PCS lane ' + m.p; out.readable = false;
         return out;
       }
-      var s = P.laneSymbol(m.p, d);
-      out.kind = 'sym'; out.readable = false;
-      out.title = 'PCS lane ' + m.p + ', symbol ' + d;
-      out.symbol = symbolInfo(s);
-      out.sources = sourcesOf([s]);
+      var pr = P.lanePair(m.p, d);
+      out.kind = 'pair'; out.readable = false;
+      out.title = 'PCS lane ' + m.p + ', unit ' + d;
+      out.pair = { cw: pr.cw, j: pr.j, parity: pr.parity, a: symbolInfo(pr.a), b: symbolInfo(pr.b) };
+      out.cover = P.coverLanePair(m.p, d);
       return out;
     }
     return null;

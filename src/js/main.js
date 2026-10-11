@@ -45,6 +45,8 @@
     P.drawPackets();
     P.updateCamera(now);
     P.updateInspector();
+    P.updateFollowTags();
+    if (P.followed()) { var fwEl = document.getElementById('follow-where'), st = P.followStatus(); if (fwEl.textContent !== st) fwEl.textContent = st; }
     G.renderer.render(G.scene, G.camera);
     P.updateLabels();
     P.drawScope();
@@ -74,6 +76,7 @@
       P.initPackets();
       P.buildBoxes();
       P.initInspector(vp);
+      P.initFollow(vp);
     } else {
       P.buildLinkScene = P.styleLinkScene = P.buildLabels = P.recolorStatic = function () {};
     }

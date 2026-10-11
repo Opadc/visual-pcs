@@ -7,7 +7,7 @@
   var m4 = new T.Matrix4(), q = new T.Quaternion(), v = new T.Vector3(), sc = new T.Vector3();
   var c = new T.Color(), tmp = new T.Color();
   var count = 0;
-  var meta = new Array(MAX), boxes = new Float32Array(MAX * 6);
+  var meta = new Array(MAX), boxes = new Float32Array(MAX * 6), hits = [];
 
   P.initPackets = function () {
     var geo = new T.BoxGeometry(1, 1, 1);
@@ -21,6 +21,14 @@
 
   function put(x, y, z, sx, sy, sz, col, id) {
     if (count >= MAX) return;
+    if (P.followed && P.followed()) {
+      var part = P.followPart(id);
+      if (part) {
+        hits.push({ i: count, part: part.key, html: part.html, key: part.key, span: part.span, lane: id.fam === 'lane' ? id.p : -1, x: x });
+        col.lerp(G.col.am, 0.55);
+        sy *= 1.35; sz *= 1.25; z += 0.25;
+      } else col.lerp(G.col.paper, 0.78);
+    }
     v.set(x, y, z); sc.set(sx, sy, sz);
     m4.compose(v, q, sc);
     G.inst.setMatrixAt(count, m4);
@@ -135,13 +143,15 @@
   }
 
   P.drawPackets = function () {
-    count = 0;
+    count = 0; hits.length = 0;
     drawAggregate();
     drawLanes();
     G.inst.count = count;
     G.inst.instanceMatrix.needsUpdate = true;
     if (G.inst.instanceColor) G.inst.instanceColor.needsUpdate = true;
   };
+
+  P.followHits = function () { return hits; };
 
   // Picking support for the inspector.
   P.packetCount = function () { return count; };

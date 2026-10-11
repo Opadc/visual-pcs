@@ -7,7 +7,7 @@
 (function (P) {
   'use strict';
 
-  P.PAYLOAD_DEFAULT = 'Call me Ishmael. Some years ago--never mind how long precisely--having little or no ' +
+  P.PAYLOAD_DEFAULT = 'Call me Ishmael. Some years ago, never mind how long precisely, having little or no ' +
     'money in my purse, and nothing particular to interest me on shore, I thought I would sail about a ' +
     'little and see the watery part of the world. ';
   P.PAYLOAD_SOURCE = 'Herman Melville, Moby-Dick (1851)';
@@ -16,6 +16,7 @@
   P.CW_K = 514;                       // data symbols per codeword
   P.PAIR_BLOCKS = 40;                 // 2 x 514 x 10 bits = 40 x 257-bit blocks
   P.LANE_SYM_PER_PAIR = 2 * P.CW_N / P.N_PCS;   // 136 symbols per PCS lane per codeword pair
+  P.LANE_PAIRS = P.CW_N / P.N_PCS;              // 68 A+B symbol pairs per PCS lane per codeword pair
   P.CHUNK = 32;                       // symbols per codeword cube in the scene
   P.CHUNKS = Math.ceil(P.CW_N / P.CHUNK);       // 17 cubes per codeword; the last holds the parity
 
@@ -83,15 +84,18 @@
     return n - Math.floor(n / P.AM_PERIOD) - 1;
   };
 
-  // Symbol d on PCS lane p. Simplified distribution: each lane takes one symbol
-  // from codeword A, then one from codeword B, in round-robin lane order.
-  P.laneSymbolId = function (p, d) {
-    var cw = Math.floor(d / P.LANE_SYM_PER_PAIR), e = d - cw * P.LANE_SYM_PER_PAIR;
-    return { cw: cw, w: e & 1, j: (e >> 1) * P.N_PCS + p };
+  // Unit d on PCS lane p is one A+B symbol pair. Symbol distribution deals
+  // pairs round-robin: pair j of the codeword pair goes to lane j mod 8. A_j
+  // and B_j are stream symbols 2j and 2j+1, so a pair is 20 adjacent stream
+  // bits, about 2.5 characters.
+  P.lanePairId = function (p, d) {
+    var cw = Math.floor(d / P.LANE_PAIRS);
+    return { cw: cw, j: (d - cw * P.LANE_PAIRS) * P.N_PCS + p };
   };
-  P.laneSymbol = function (p, d) {
-    var id = P.laneSymbolId(p, d);
-    return P.cwSymbol(id.cw, id.w, id.j);
+  P.lanePair = function (p, d) {
+    var id = P.lanePairId(p, d);
+    return { cw: id.cw, j: id.j, parity: id.j >= P.CW_K,
+             a: P.cwSymbol(id.cw, 0, id.j), b: P.cwSymbol(id.cw, 1, id.j) };
   };
 
   // Codeword cube n of row w covers symbols CHUNK*c .. CHUNK*c+31 of codeword w in pair cw.
@@ -100,7 +104,76 @@
     return { cw: cw, c: n - cw * P.CHUNKS };
   };
 
+  // Bytes whose bits fall in stream bits [b0, b0 + n): [{ idx, n }], in order.
+  function coverBits(b0, n, out) {
+    for (var b = b0; b < b0 + n; b++) {
+      var s = streamBit(b);
+      if (s.src !== 'b') continue;
+      var last = out[out.length - 1];
+      if (last && last.idx === s.idx) last.n++;
+      else out.push({ idx: s.idx, n: 1 });
+    }
+    return out;
+  }
+  function symBits(cw, w, j) { return (cw * 2 * P.CW_K + 2 * j + w) * 10; }
+
+  // Which characters each kind of block carries, as absolute byte indices.
+  var memo = new Map(), memoVer = -1;
+  function cached(key, fn) {
+    if (memoVer !== P.payloadVersion) { memo.clear(); memoVer = P.payloadVersion; }
+    var v = memo.get(key);
+    if (!v) { v = fn(); if (memo.size > 6000) memo.clear(); memo.set(key, v); }
+    return v;
+  }
+  function whole(start, len) {
+    var out = [];
+    for (var i = 0; i < len; i++) out.push({ idx: start + i, n: 8 });
+    return out;
+  }
+  P.coverG66 = function (n) { return whole(8 * n, 8); };
+  P.coverG257 = function (m) { return whole(32 * m, 32); };
+  P.coverChunk = function (cw, w, c) {
+    return cached('c' + cw + ':' + w + ':' + c, function () {
+      var out = [];
+      for (var j = c * P.CHUNK; j < Math.min((c + 1) * P.CHUNK, P.CW_K); j++) coverBits(symBits(cw, w, j), 10, out);
+      return out;
+    });
+  };
+  P.coverLanePair = function (p, d) {
+    var id = P.lanePairId(p, d);
+    if (id.j >= P.CW_K) return [];
+    return cached('l' + id.cw + ':' + id.j, function () { return coverBits(symBits(id.cw, 0, id.j), 20, []); });
+  };
+
+  // The word around byte i, in passage offsets (the passage repeats).
+  function isWordChar(c) { return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 39; }
+  P.passageLength = function () { return bytes.length; };
+  P.wordAround = function (i) {
+    var L = bytes.length, k = mod(i, L);
+    if (!isWordChar(bytes[k])) return null;
+    var s = k, e = k + 1;
+    while (s > 0 && isWordChar(bytes[s - 1])) s--;
+    while (e < L && isWordChar(bytes[e])) e++;
+    return { s: s, e: e, text: String.fromCharCode.apply(null, bytes.slice(s, e)) };
+  };
+  P.inWord = function (i, w) { var k = mod(i, bytes.length); return k >= w.s && k < w.e; };
+  // Characters of word w present in a cover list, e.g. 'Ish'. '' if none.
+  // The same, as a mask over the word: which letters this block holds bits of.
+  P.wordMask = function (cover, w) {
+    var L = bytes.length, has = new Array(w.e - w.s).fill(false), any = false;
+    for (var i = 0; i < cover.length; i++) {
+      if (!P.inWord(cover[i].idx, w)) continue;
+      has[mod(cover[i].idx, L) - w.s] = true; any = true;
+    }
+    return any ? has : null;
+  };
+  P.wordPart = function (cover, w) {
+    var s = '';
+    for (var i = 0; i < cover.length; i++) if (P.inWord(cover[i].idx, w)) s += String.fromCharCode(P.byteAt(cover[i].idx));
+    return s;
+  };
+
   P.hex = function (v, digits) { return v.toString(16).toUpperCase().padStart(digits, '0'); };
   P.bin = function (v, n) { return v.toString(2).padStart(n, '0'); };
-  P.glyph = function (b) { return b === 32 ? '·' : String.fromCharCode(b); };
+  P.glyph = function (b) { return String.fromCharCode(b); };
 })(globalThis.PCS = globalThis.PCS || {});

@@ -48,21 +48,45 @@ test('a symbol reports the characters its bits came from', () => {
   assert.equal(s.value, parseInt('1' + '01000011' + '0', 2));
 });
 
-test('lanes carry every symbol of a codeword pair exactly once', () => {
+test('lanes carry every A+B symbol pair of a codeword pair exactly once', () => {
   const seen = new Set();
   let parity = 0;
   for (let p = 0; p < 8; p++) {
-    for (let d = 0; d < P.LANE_SYM_PER_PAIR; d++) {
-      const id = P.laneSymbolId(p, d);
+    for (let d = 0; d < P.LANE_PAIRS; d++) {
+      const id = P.lanePairId(p, d);
       assert.equal(id.cw, 0);
-      seen.add(`${id.w}:${id.j}`);
+      seen.add(id.j);
       if (id.j >= P.CW_K) parity++;
     }
   }
-  assert.equal(seen.size, 2 * P.CW_N);
-  assert.equal(parity, 2 * (P.CW_N - P.CW_K));
-  // Each lane alternates A, B, A, B.
-  assert.deepEqual([0, 1, 2, 3].map((d) => P.laneSymbolId(5, d).w), [0, 1, 0, 1]);
+  assert.equal(seen.size, P.CW_N);
+  assert.equal(parity, P.CW_N - P.CW_K);
+  assert.equal(P.lanePairId(3, P.LANE_PAIRS).cw, 1);
+});
+
+test('a lane unit is 20 adjacent stream bits, about 2.5 characters', () => {
+  P.setPayload('');
+  // Pair j = 0 sits on lane 0: header bit + 'C' + 'a' + 3 bits of 'l'.
+  const pair = P.lanePair(0, 0);
+  assert.equal(P.bin(pair.a.value, 10) + P.bin(pair.b.value, 10),
+    '1' + P.bin(0x43, 8) + P.bin(0x61, 8) + P.bin(0x6C, 8).slice(0, 3));
+  const cover = P.coverLanePair(0, 0);
+  assert.deepEqual(cover.map((c) => [String.fromCharCode(P.byteAt(c.idx)), c.n]), [['C', 8], ['a', 8], ['l', 3]]);
+  assert.deepEqual(P.coverLanePair(0, P.LANE_PAIRS - 1), []);   // parity
+});
+
+test('word lookup and word parts', () => {
+  P.setPayload('');
+  const w = P.wordAround(10);                // inside 'Ishmael'
+  assert.equal(w.text, 'Ishmael');
+  assert.equal(P.wordAround(4), null);       // the space after 'Call'
+  assert.ok(P.inWord(w.s + P.passageLength(), w), 'the passage repeats');
+  // 'Ishmael' is bytes 8..14 = all of 66-bit block 1 except the space before it.
+  assert.equal(P.wordPart(P.coverG66(1), w), 'Ishmael');
+  // Pairs 3..6 sit on lanes 3..6 and each holds a slice of the word. Partial
+  // characters count, so neighbouring slices overlap by one letter.
+  assert.deepEqual([3, 4, 5, 6].map((p) => P.wordPart(P.coverLanePair(p, 0), w)), ['Is', 'shma', 'ael', 'l']);
+  assert.equal(P.wordPart(P.coverLanePair(2, 0), w), '');
 });
 
 test('lane data index skips alignment markers', () => {

@@ -103,7 +103,7 @@
     mi.value = P.PAYLOAD_DEFAULT.trim();
     mi.placeholder = P.PAYLOAD_SOURCE;
     mi.title = P.PAYLOAD_SOURCE;
-    mi.addEventListener('input', function () { P.setPayload(mi.value ? mi.value + ' ' : ''); });
+    mi.addEventListener('input', function () { P.setPayload(mi.value ? mi.value + ' ' : ''); P.emit('payload'); });
     $('btn-play').onclick = function () { P.setPlaying(!S.playing); };
     $('btn-step').onclick = P.step;
     $('sel-speed').onchange = function (e) { S.speed = +e.target.value; };
