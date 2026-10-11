@@ -89,3 +89,17 @@ details[open] .dname::before { content: "–"; }
   .faults { grid-template-columns: 1fr; }
   .orow { grid-template-columns: 1fr; gap: 4px; }
 }
+
+.msg-zones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
+.msg-zone { padding: 8px; border-radius: 3px; background: var(--rule-2); border: 1px solid var(--rule); font-size: 0.8rem; display: grid; gap: 2px; }
+.msg-zone.active { background: color-mix(in srgb, var(--ink) 8%, transparent); border-color: var(--ink); }
+.msg-zone .name { font-weight: 600; color: var(--ink); }
+.msg-zone .type { font-family: var(--f-mono); font-size: 0.7rem; color: var(--muted); }
+
+.msg-lanes { display: grid; gap: 4px; margin-bottom: 8px; }
+.mlabel { font-family: var(--f-display); font-size: var(--s-1); font-weight: 600; }
+.msg-lanes .mlane { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: center; font-family: var(--f-mono); font-size: 0.75rem; }
+.msg-lanes small { color: var(--muted); }
+.msg-lanes code { background: var(--rule-2); padding: 2px 5px; border-radius: 2px; word-break: break-all; color: var(--ink); }
+
+.msg-note { font-size: 0.8rem; color: var(--ink-2); line-height: 1.45; }

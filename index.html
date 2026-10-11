@@ -334,6 +334,20 @@ details[open] .dname::before { content: "–"; }
   .orow { grid-template-columns: 1fr; gap: 4px; }
 }
 
+.msg-zones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
+.msg-zone { padding: 8px; border-radius: 3px; background: var(--rule-2); border: 1px solid var(--rule); font-size: 0.8rem; display: grid; gap: 2px; }
+.msg-zone.active { background: color-mix(in srgb, var(--ink) 8%, transparent); border-color: var(--ink); }
+.msg-zone .name { font-weight: 600; color: var(--ink); }
+.msg-zone .type { font-family: var(--f-mono); font-size: 0.7rem; color: var(--muted); }
+
+.msg-lanes { display: grid; gap: 4px; margin-bottom: 8px; }
+.mlabel { font-family: var(--f-display); font-size: var(--s-1); font-weight: 600; }
+.msg-lanes .mlane { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: center; font-family: var(--f-mono); font-size: 0.75rem; }
+.msg-lanes small { color: var(--muted); }
+.msg-lanes code { background: var(--rule-2); padding: 2px 5px; border-radius: 2px; word-break: break-all; color: var(--ink); }
+
+.msg-note { font-size: 0.8rem; color: var(--ink-2); line-height: 1.45; }
+
 .story { padding-inline: var(--gutter); padding-block: 24px 64px; display: grid; gap: 56px; max-width: 1160px; margin: 0 auto; }
 .story section { display: grid; grid-template-columns: minmax(0, 68ch) minmax(0, 1fr); gap: 16px 40px; align-items: start; }
 .story section > * { grid-column: 1; }
@@ -499,6 +513,11 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   <article class="stage-detail" id="stage-detail" aria-live="polite"></article>
 
   <div class="panels">
+    <section class="panel" aria-labelledby="msg-title">
+      <header><h3 id="msg-title">Message tracker</h3><span class="tag std">TX/RX path</span></header>
+      <div id="msg-detail"></div>
+    </section>
+
     <section class="panel" aria-labelledby="map-title">
       <header><h3 id="map-title">PCS-to-SerDes mapping</h3><span class="tag std">Standard concept</span></header>
       <div class="order" id="order-strip"></div>
@@ -1459,11 +1478,19 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   // Stages where message is readable as ASCII (before/after FEC)
   var ASCII_TX_END = P.X.mux[0];           // through pre-FEC distributor
   var ASCII_RX_START = P.X.reorder[1];     // after post-FEC interleave
+  var HEX_TX_START = 24.5;                 // pre-FEC distribution begins
+  var HEX_RX_END = 83.5;                   // post-FEC interleave ends
 
   function msgCharAt(u, slot) {
     // Approximate which message byte is at this position
     var byteIdx = Math.floor((u - P.X.lanesStart) / P.GAP) % msgBuf.length;
     return String.fromCharCode(msgBuf[byteIdx] || 32); // space if undefined
+  }
+
+  function symHexAt(u) {
+    // 10-bit symbol as hex, for abstract representation in FEC zone
+    var idx = Math.floor((u - HEX_TX_START) * 10 / P.GAP) % 1024;
+    return (idx & 0x3FF).toString(16).toUpperCase().padStart(3, '0');
   }
 
   P.initPackets = function () {
@@ -1502,7 +1529,8 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       var noisy = f.noise > 0 && (f.noiseLane < 0 || f.noiseLane === lane.serdes);
       var dead = f.los && f.losLane === lane.serdes;
       var amBad = f.amLoss && f.amLane === p;
-      var showAscii = S.u < ASCII_TX_END || S.u > ASCII_RX_START;
+      var showAscii = (S.u < HEX_TX_START || S.u > HEX_RX_END) && (x < HEX_TX_START || x > HEX_RX_END);
+      var showHex = S.u >= HEX_TX_START && S.u <= HEX_RX_END && x >= HEX_TX_START && x <= HEX_RX_END;
       for (var n = Math.max(nLo, 0); n <= nHi; n++) {
         var u = X.lanesStart + S.u - n * P.GAP;
         var x = P.warp(u, segs);
@@ -1516,6 +1544,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
         var label = '';
         if (isAm) { c.lerp(G.col.paper, 0.45); len = Math.max(0.18, 0.26 * comp); h = 1.05; d = 0.9; label = 'AM'; }
         else if (showAscii) label = msgCharAt(u, p);
+        else if (showHex) { c.lerp(G.col.paper, 0.3); label = symHexAt(u); }
         if (dead && x > X.noiseAt && x < X.amLock + 0.5) {
           c.copy(G.col.muted); y += (P.hash(n, p) - 0.5) * 0.5; h *= 0.6;
         } else if (amBad && isAm && x > X.mux[0]) {
@@ -2175,6 +2204,53 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   }
 })(globalThis.PCS = globalThis.PCS || {});
 
+/* ---- ui-message.js ---- */
+/* Message tracker: show ASCII before FEC, hex in FEC zone, ASCII after FEC. */
+(function (P) {
+  'use strict';
+  var S = P.state, $ = function (id) { return document.getElementById(id); };
+
+  P.renderMessage = function () {
+    var msg = S.messageContent || 'Call me Ishmael';
+    var len = msg.length;
+    var detail = $('msg-detail');
+    if (!detail) return;
+
+    var zones = [
+      { x: [-2, 24.5], name: 'TX: MAC → Pre-FEC', show: 'ascii' },
+      { x: [24.5, 83.5], name: 'FEC zone: Pre-FEC → Post-FEC interleave', show: 'hex' },
+      { x: [83.5, 116], name: 'RX: Post-FEC → MAC', show: 'ascii' }
+    ];
+
+    var html = '<div class="msg-zones">';
+    zones.forEach(function (z) {
+      var here = S.u >= z.x[0] && S.u <= z.x[1];
+      html += '<div class="msg-zone' + (here ? ' active' : '') + '"><span class="name">' + z.name + '</span>' +
+        '<span class="type">' + (z.show === 'ascii' ? 'ASCII readable' : '10-bit symbols') + '</span></div>';
+    });
+    html += '</div>';
+
+    html += '<div class="msg-lanes"><span class="mlabel">Per-lane content:</span>';
+    for (var i = 0; i < 8; i++) {
+      var slice = P.messageLaneSlice(i).map(function (c) { return String.fromCharCode(c); }).join('');
+      html += '<div class="mlane l' + i + '"><small>Lane ' + i + '</small><code>' + (slice || '(empty)') + '</code></div>';
+    }
+    html += '</div>';
+
+    html += '<p class="msg-note">Message flows through the pipeline: readable as text before Pre-FEC and after Post-FEC interleave, ' +
+      'hidden as 10-bit symbols during FEC encoding/decoding (byte alignment breaks, ' +
+      'so characters are no longer visible). Each lane carries every ' + (8 / len === Math.floor(8 / len) ? Math.floor(8 / len) : '~1 of ' + len) + ' character.</p>';
+
+    detail.innerHTML = html;
+  };
+
+  P.on(function (what) {
+    if (what === 'message' || what === 'link' || what === 'play' || what === 'stage') {
+      P.renderMessage();
+    }
+  });
+})(globalThis.PCS = globalThis.PCS || {});
+
 /* ---- figures.js ---- */
 /* Static explanatory figures for the narrative, drawn as inline SVG. */
 (function (P) {
@@ -2339,7 +2415,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 
   function onEvent(what) {
     if (what === 'link') {
-      P.buildLinkScene(); P.buildLabels(); P.renderMapping(); P.scopeNote();
+      P.buildLinkScene(); P.buildLabels(); P.renderMapping(); P.scopeNote(); P.renderMessage();
       if (S.width !== lastWidth) { lastWidth = S.width; P.renderFaults(); P.sizeScope(); }
       P.syncToolbar(); P.renderDiag();
     } else if (what === 'lock' || what === 'align') {
@@ -2347,13 +2423,14 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     } else if (what === 'select') {
       P.styleLinkScene(); P.buildLabels(); P.renderMapping(); P.syncToolbar(); P.renderDiag();
     } else if (what === 'message') {
-      // Message changed; redraw packets on next frame
+      // Message changed; redraw packets on next frame and update tracker
+      P.renderMessage();
     } else if (what === 'fault') {
       P.styleLinkScene(); P.renderDiag();
     } else if (what === 'stage') {
       P.buildLabels();
     } else if (what === 'tick') {
-      // Diagnostics are refreshed from the frame loop at a steady rate.
+      // Diagnostics and message position update from the frame loop at a steady rate.
     }
   }
 
@@ -2409,6 +2486,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       P.buildLinkScene = P.styleLinkScene = P.buildLabels = P.recolorStatic = function () {};
     }
     P.rebuild(false);
+    P.renderMessage();
     if (!G.failed) {
       var narrow = vp.clientWidth < 760;
       P.flyTo(narrow ? P.framePose(29, 72, 1) : P.framePose(-2, 118, 0.6), 0);

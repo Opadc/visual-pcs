@@ -10,11 +10,19 @@
   // Stages where message is readable as ASCII (before/after FEC)
   var ASCII_TX_END = P.X.mux[0];           // through pre-FEC distributor
   var ASCII_RX_START = P.X.reorder[1];     // after post-FEC interleave
+  var HEX_TX_START = 24.5;                 // pre-FEC distribution begins
+  var HEX_RX_END = 83.5;                   // post-FEC interleave ends
 
   function msgCharAt(u, slot) {
     // Approximate which message byte is at this position
     var byteIdx = Math.floor((u - P.X.lanesStart) / P.GAP) % msgBuf.length;
     return String.fromCharCode(msgBuf[byteIdx] || 32); // space if undefined
+  }
+
+  function symHexAt(u) {
+    // 10-bit symbol as hex, for abstract representation in FEC zone
+    var idx = Math.floor((u - HEX_TX_START) * 10 / P.GAP) % 1024;
+    return (idx & 0x3FF).toString(16).toUpperCase().padStart(3, '0');
   }
 
   P.initPackets = function () {
@@ -53,7 +61,8 @@
       var noisy = f.noise > 0 && (f.noiseLane < 0 || f.noiseLane === lane.serdes);
       var dead = f.los && f.losLane === lane.serdes;
       var amBad = f.amLoss && f.amLane === p;
-      var showAscii = S.u < ASCII_TX_END || S.u > ASCII_RX_START;
+      var showAscii = (S.u < HEX_TX_START || S.u > HEX_RX_END) && (x < HEX_TX_START || x > HEX_RX_END);
+      var showHex = S.u >= HEX_TX_START && S.u <= HEX_RX_END && x >= HEX_TX_START && x <= HEX_RX_END;
       for (var n = Math.max(nLo, 0); n <= nHi; n++) {
         var u = X.lanesStart + S.u - n * P.GAP;
         var x = P.warp(u, segs);
@@ -67,6 +76,7 @@
         var label = '';
         if (isAm) { c.lerp(G.col.paper, 0.45); len = Math.max(0.18, 0.26 * comp); h = 1.05; d = 0.9; label = 'AM'; }
         else if (showAscii) label = msgCharAt(u, p);
+        else if (showHex) { c.lerp(G.col.paper, 0.3); label = symHexAt(u); }
         if (dead && x > X.noiseAt && x < X.amLock + 0.5) {
           c.copy(G.col.muted); y += (P.hash(n, p) - 0.5) * 0.5; h *= 0.6;
         } else if (amBad && isAm && x > X.mux[0]) {

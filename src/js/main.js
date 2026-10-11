@@ -8,7 +8,7 @@
 
   function onEvent(what) {
     if (what === 'link') {
-      P.buildLinkScene(); P.buildLabels(); P.renderMapping(); P.scopeNote();
+      P.buildLinkScene(); P.buildLabels(); P.renderMapping(); P.scopeNote(); P.renderMessage();
       if (S.width !== lastWidth) { lastWidth = S.width; P.renderFaults(); P.sizeScope(); }
       P.syncToolbar(); P.renderDiag();
     } else if (what === 'lock' || what === 'align') {
@@ -16,13 +16,14 @@
     } else if (what === 'select') {
       P.styleLinkScene(); P.buildLabels(); P.renderMapping(); P.syncToolbar(); P.renderDiag();
     } else if (what === 'message') {
-      // Message changed; redraw packets on next frame
+      // Message changed; redraw packets on next frame and update tracker
+      P.renderMessage();
     } else if (what === 'fault') {
       P.styleLinkScene(); P.renderDiag();
     } else if (what === 'stage') {
       P.buildLabels();
     } else if (what === 'tick') {
-      // Diagnostics are refreshed from the frame loop at a steady rate.
+      // Diagnostics and message position update from the frame loop at a steady rate.
     }
   }
 
@@ -78,6 +79,7 @@
       P.buildLinkScene = P.styleLinkScene = P.buildLabels = P.recolorStatic = function () {};
     }
     P.rebuild(false);
+    P.renderMessage();
     if (!G.failed) {
       var narrow = vp.clientWidth < 760;
       P.flyTo(narrow ? P.framePose(29, 72, 1) : P.framePose(-2, 118, 0.6), 0);
