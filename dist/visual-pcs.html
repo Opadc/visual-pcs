@@ -1,0 +1,2368 @@
+<title>Visual PCS</title>
+<meta name="description" content="An interactive 3D walk through the 200GBASE-R Ethernet PCS: PCS lanes, PMA bit-multiplexing, SerDes lanes, alignment, deskew and FEC diagnostics.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+/* Layout: a lab bench. Full-bleed 3D lane diagram up top with its readouts
+   below like a scope's measurement bar; a single reading column after it, with
+   wide figures breaking out. Colour is reserved for lane identity and state;
+   everything else is ink on a cool drafting paper. */
+:root {
+  --paper: #f3f5f7;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-2: #3b4655;
+  --muted: #687384;
+  --rule: #d5dbe3;
+  --rule-2: #e6eaf0;
+  --scene-bg: #eef1f5;
+  --scene-box: #dde3eb;
+  --scene-edge: #8592a5;
+  --focus: #2b4bd6;
+  --good: #2f8a4c;
+  --warn: #c98a12;
+  --bad: #cc2936;
+  --am: #e2a41f;
+  --cw-a: #5c6b82;
+  --cw-b: #9aa6b8;
+  --lane-0: #e08a00;
+  --lane-1: #2f9fd8;
+  --lane-2: #079a72;
+  --lane-3: #d4542a;
+  --lane-4: #c7569c;
+  --lane-5: #2e58b8;
+  --lane-6: #8f8a1b;
+  --lane-7: #7a4fc4;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --s-1: 0.75rem;
+  --s-0: 0.875rem;
+  --s1: 1.0625rem;
+  --s2: 1.3rem;
+  --s3: 1.75rem;
+  --s4: clamp(2.1rem, 4.2vw + 0.6rem, 3.6rem);
+  --gutter: clamp(16px, 3vw, 40px);
+  --radius: 4px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f141b; --panel: #161d27; --ink: #e5e9ef; --ink-2: #c1c9d4; --muted: #8b96a6;
+    --rule: #2a3442; --rule-2: #202937; --scene-bg: #121922; --scene-box: #253041; --scene-edge: #6c7a8f;
+    --focus: #8ea6ff; --good: #4cc276; --warn: #e5b23a; --bad: #ff5d68; --am: #f0bd45;
+    --cw-a: #8492a8; --cw-b: #55627a;
+    --lane-0: #f5a524; --lane-1: #5cc0f2; --lane-2: #2fc596; --lane-3: #ff7a4d;
+    --lane-4: #ee82c2; --lane-5: #7c9cf0; --lane-6: #c9c23e; --lane-7: #a98bf0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f141b; --panel: #161d27; --ink: #e5e9ef; --ink-2: #c1c9d4; --muted: #8b96a6;
+  --rule: #2a3442; --rule-2: #202937; --scene-bg: #121922; --scene-box: #253041; --scene-edge: #6c7a8f;
+  --focus: #8ea6ff; --good: #4cc276; --warn: #e5b23a; --bad: #ff5d68; --am: #f0bd45;
+  --cw-a: #8492a8; --cw-b: #55627a;
+  --lane-0: #f5a524; --lane-1: #5cc0f2; --lane-2: #2fc596; --lane-3: #ff7a4d;
+  --lane-4: #ee82c2; --lane-5: #7c9cf0; --lane-6: #c9c23e; --lane-7: #a98bf0;
+  color-scheme: dark;
+}
+.l0 { --lc: var(--lane-0); } .l1 { --lc: var(--lane-1); } .l2 { --lc: var(--lane-2); } .l3 { --lc: var(--lane-3); }
+.l4 { --lc: var(--lane-4); } .l5 { --lc: var(--lane-5); } .l6 { --lc: var(--lane-6); } .l7 { --lc: var(--lane-7); }
+
+html { background: var(--paper); }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--f-body); font-size: var(--s1); line-height: 1.6;
+  font-optical-sizing: auto; -webkit-font-smoothing: antialiased;
+}
+* { box-sizing: border-box; }
+h1, h2, h3, h4 { font-family: var(--f-display); line-height: 1.12; text-wrap: balance; margin: 0; color: var(--ink); }
+p { margin: 0; }
+a { color: inherit; text-decoration-color: var(--scene-edge); text-underline-offset: 3px; }
+a:hover { text-decoration-color: currentColor; }
+code, .mono { font-family: var(--f-mono); font-size: 0.86em; }
+b, strong { font-weight: 600; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.mast {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  padding-block: 14px; padding-inline: var(--gutter); border-bottom: 1px solid var(--rule);
+}
+.brand { font-family: var(--f-display); font-stretch: 125%; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.02em; text-decoration: none; }
+.brand span { font-family: var(--f-mono); font-stretch: normal; font-weight: 500; font-size: 0.72rem; color: var(--muted); margin-left: 10px; letter-spacing: 0; }
+.mast nav { display: flex; gap: 18px; flex-wrap: wrap; font-family: var(--f-display); font-size: var(--s-0); }
+.mast nav a { text-decoration: none; color: var(--ink-2); }
+.mast nav a:hover { color: var(--ink); text-decoration: underline; }
+
+.hero {
+  display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px 48px; align-items: end;
+  padding-block: clamp(28px, 5vw, 56px) 22px; padding-inline: var(--gutter);
+}
+.kicker { font-family: var(--f-mono); font-size: var(--s-1); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+.hero h1 { font-size: var(--s4); font-stretch: 78%; font-weight: 800; letter-spacing: -0.01em; }
+.hero h1 em { font-style: normal; font-stretch: 125%; font-weight: 300; font-size: 0.6em; display: block; letter-spacing: 0; margin-top: 6px; color: var(--ink-2); }
+.lede { font-size: 1.12rem; color: var(--ink-2); max-width: 46ch; }
+.terms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--ink); margin-inline: var(--gutter); }
+.term { padding: 12px 18px 16px 0; border-right: 1px solid var(--rule); min-width: 0; }
+.term + .term { padding-left: 18px; }
+.term:last-child { border-right: 0; }
+.term dt { font-family: var(--f-display); font-weight: 700; font-size: var(--s-0); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
+.term dd { margin: 0; font-size: 0.95rem; color: var(--ink-2); }
+.term dt i { display: inline-block; width: 22px; height: 8px; margin-right: 8px; vertical-align: 2px; border-radius: 2px; }
+.t-pcs dt i { background: linear-gradient(90deg, var(--lane-0) 0 33%, var(--lane-1) 0 66%, var(--lane-2) 0); }
+.t-pma dt i { background: repeating-linear-gradient(90deg, var(--ink-2) 0 3px, transparent 0 6px); }
+.t-ser dt i { background: var(--ink); height: 10px; border-radius: 6px; }
+
+@media (max-width: 760px) {
+  .hero { grid-template-columns: 1fr; }
+  .terms { grid-template-columns: 1fr; }
+  .term, .term + .term { border-right: 0; border-bottom: 1px solid var(--rule); padding: 12px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+
+.lab { padding-inline: var(--gutter); padding-block: 26px 40px; }
+.lab-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 24px; flex-wrap: wrap; margin-bottom: 12px; }
+.lab-head h2 { font-size: var(--s3); font-stretch: 85%; font-weight: 800; }
+.lab-head h2 span { font-family: var(--f-mono); font-size: var(--s-1); font-weight: 500; color: var(--muted); margin-left: 10px; letter-spacing: 0; }
+.lab-summary { font-family: var(--f-mono); font-size: var(--s-1); color: var(--ink-2); }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; padding: 10px 0; border-top: 1px solid var(--ink); }
+.tgroup { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tlabel, .field span { font-family: var(--f-display); font-size: var(--s-1); font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.field { display: flex; align-items: center; gap: 6px; }
+select, .btn, .segbtn, .chip {
+  font-family: var(--f-display); font-size: var(--s-0); color: var(--ink);
+  background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius);
+  min-height: 34px; padding: 4px 11px; cursor: pointer;
+}
+select { padding-right: 6px; }
+.btn:hover, .segbtn:hover, .chip:hover, select:hover { border-color: var(--scene-edge); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); min-width: 84px; font-weight: 600; }
+.btn[aria-pressed="true"]:not(.primary) { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.seg { display: inline-flex; }
+.segbtn { border-radius: 0; margin-left: -1px; }
+.segbtn:first-child { border-radius: var(--radius) 0 0 var(--radius); margin-left: 0; }
+.segbtn:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+.segbtn[aria-checked="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); position: relative; font-weight: 600; }
+
+.lanepick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 0 0 10px; }
+.lanepick .tlabel { margin-right: 4px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-weight: 600; min-width: 44px; justify-content: center; }
+.chip i { width: 10px; height: 10px; border-radius: 2px; background: var(--lc); }
+.chip[aria-pressed="true"] { border-color: var(--lc, var(--ink)); box-shadow: inset 0 0 0 1px var(--lc, var(--ink)); background: color-mix(in srgb, var(--lc, var(--ink)) 14%, var(--panel)); }
+.chip.all[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.keys { font-family: var(--f-mono); font-size: 0.7rem; color: var(--muted); margin-left: auto; }
+
+.viewport {
+  position: relative; height: clamp(360px, 48vh, 560px); background: var(--scene-bg);
+  border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden;
+}
+.viewport:focus-visible { outline-offset: -2px; }
+.viewport canvas { display: block; width: 100%; height: 100%; }
+.legend {
+  position: absolute; left: 10px; top: 10px; z-index: 3; display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: calc(100% - 20px);
+  font-family: var(--f-mono); font-size: 0.68rem; color: var(--ink-2);
+  background: color-mix(in srgb, var(--scene-bg) 86%, transparent); padding: 5px 8px; border-radius: 3px; pointer-events: none;
+}
+.legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.legend i { display: inline-block; }
+.lg-cube { width: 10px; height: 8px; background: var(--lane-1); }
+.lg-am { width: 4px; height: 13px; background: color-mix(in srgb, var(--lane-1) 55%, var(--scene-bg)); }
+.lg-ring { width: 10px; height: 10px; border: 2px solid var(--good); border-radius: 50%; }
+.lg-sheath { width: 16px; height: 9px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 18%, transparent); }
+.lg-bad { width: 9px; height: 9px; background: var(--bad); }
+.vp-help, .lab-hint {
+  position: absolute; right: 10px; bottom: 10px; z-index: 3; font-family: var(--f-mono); font-size: 0.68rem; color: var(--muted);
+  background: color-mix(in srgb, var(--scene-bg) 86%, transparent); padding: 3px 7px; border-radius: 3px; pointer-events: none;
+}
+.lab-hint { bottom: 36px; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); }
+.noscript { position: absolute; inset: 40% 10% auto; text-align: center; color: var(--ink-2); }
+
+.scene-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+.lbl { position: absolute; left: 0; top: 0; white-space: nowrap; font-family: var(--f-mono); font-size: 10.5px; line-height: 1.25; color: var(--ink-2); will-change: transform; }
+.lbl-box { font-family: var(--f-display); font-size: 11px; font-weight: 600; color: var(--ink); background: color-mix(in srgb, var(--scene-bg) 80%, transparent); padding: 0 3px; }
+.lbl-stage b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--ink); font-family: var(--f-display); font-size: 11px; color: var(--ink); background: var(--scene-bg); }
+.lbl-stage.on b { background: var(--ink); color: var(--paper); }
+.lbl-lane { font-weight: 600; color: var(--ink); padding: 0 4px; border-left: 3px solid var(--lc); background: color-mix(in srgb, var(--scene-bg) 85%, transparent); }
+.lbl.dim { opacity: 0.32; }
+.lbl-pma { font-size: 9.5px; color: var(--muted); }
+.lbl-serdes { font-family: var(--f-display); font-size: 11px; font-weight: 700; color: var(--ink); background: color-mix(in srgb, var(--scene-bg) 85%, transparent); padding: 0 4px; }
+.lbl-serdes span { font-family: var(--f-mono); font-weight: 500; color: var(--muted); margin-left: 4px; }
+.lbl-status { font-weight: 600; padding: 2px 7px; border-radius: 10px; color: var(--paper); }
+.lbl-status.ok { background: var(--good); }
+.lbl-status.bad { background: var(--bad); }
+.lbl-note { color: var(--muted); }
+.lbl-zone { font-family: var(--f-display); font-stretch: 125%; font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: var(--muted); }
+.lbl-callout { font-size: 11px; font-weight: 600; color: var(--ink); background: var(--panel); border: 1px solid var(--lc); border-radius: 3px; padding: 2px 6px; box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 12%, transparent); }
+
+.rail { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 0; margin-top: 10px; border-bottom: 1px solid var(--rule); }
+.rail button {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; gap: 2px 7px; align-items: center; text-align: left;
+  background: none; border: 0; border-top: 3px solid var(--rule); padding: 8px 10px 10px 2px; cursor: pointer; color: var(--ink-2); min-width: 0;
+}
+.rail button:hover { border-top-color: var(--scene-edge); color: var(--ink); }
+.rail button[aria-current="step"] { border-top-color: var(--ink); color: var(--ink); }
+.rn { font-family: var(--f-display); font-weight: 800; font-size: 1.05rem; grid-row: span 2; }
+.rs { font-family: var(--f-mono); font-size: 0.62rem; letter-spacing: 0.08em; color: var(--muted); }
+.rt { font-family: var(--f-display); font-size: 0.75rem; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+.stage-detail { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 10px 28px; padding: 16px 0 20px; border-bottom: 1px solid var(--rule); }
+.sd-head { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-content: start; }
+.sd-num { font-family: var(--f-display); font-weight: 800; font-size: 2.2rem; line-height: 1; grid-row: span 2; }
+.sd-side { font-family: var(--f-mono); font-size: 0.68rem; letter-spacing: 0.1em; color: var(--muted); }
+.sd-head h3 { font-size: var(--s1); font-stretch: 90%; grid-column: 2; }
+.sd-body { display: grid; gap: 8px; max-width: 72ch; font-size: 0.98rem; }
+.sd-watch { font-size: 0.92rem; color: var(--ink-2); border-left: 2px solid var(--ink); padding-left: 10px; }
+.sd-nav { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+
+@media (max-width: 900px) {
+  .rail { display: flex; overflow-x: auto; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+  .rail button { flex: 0 0 9.5rem; scroll-snap-align: center; }
+  .stage-detail { grid-template-columns: 1fr; }
+  .keys { display: none; }
+}
+@media (max-width: 560px) {
+  .viewport { height: 420px; }
+  .legend { font-size: 0.62rem; gap: 2px 8px; }
+  .toolbar { gap: 10px 14px; }
+}
+
+.panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 18px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px 16px; min-width: 0; display: grid; gap: 12px; align-content: start; }
+.panel header { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 12px; flex-wrap: wrap; border-bottom: 1px solid var(--rule-2); padding-bottom: 8px; }
+.panel h3 { font-size: var(--s1); font-stretch: 90%; font-weight: 700; }
+.tag { font-family: var(--f-mono); font-size: 0.68rem; color: var(--muted); }
+.tag.std { color: var(--ink); border: 1px solid var(--ink); border-radius: 3px; padding: 0 5px; }
+.note { font-size: 0.88rem; color: var(--ink-2); }
+
+.order { display: grid; gap: 6px; }
+.orow { display: grid; grid-template-columns: 11.5rem minmax(0, 1fr); align-items: center; gap: 10px; }
+.orow > span { font-family: var(--f-display); font-size: var(--s-1); color: var(--muted); }
+.orow > div { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
+.oc { font-family: var(--f-mono); font-weight: 600; font-size: 0.8rem; height: 28px; border-radius: 3px; cursor: pointer;
+  border: 0; color: var(--paper); background: var(--lc); }
+.oc.dim { opacity: 0.25; }
+.oc.on { outline: 2px solid var(--ink); outline-offset: 1px; }
+.tablewrap { overflow-x: auto; }
+.maptable { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.maptable th, .maptable td { padding: 5px 8px; text-align: left; border-bottom: 1px solid var(--rule-2); white-space: nowrap; }
+.maptable thead th { font-family: var(--f-display); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.maptable tbody tr { cursor: pointer; }
+.maptable tbody tr:hover { background: var(--rule-2); }
+.maptable tr.on { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.maptable tr.dim { opacity: 0.45; }
+.maptable small { color: var(--muted); margin-left: 2px; }
+.maptable .num { text-align: right; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--lc); margin-right: 7px; vertical-align: -1px; }
+.pill { display: inline-block; font-family: var(--f-mono); font-size: 0.72rem; font-weight: 600; padding: 0 7px; border-radius: 9px; line-height: 1.6; }
+.pill.locked { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.pill.checking, .pill.searching { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.pill.nolock { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+
+.scopewrap { position: relative; cursor: pointer; }
+.scopewrap canvas { display: block; width: 100%; }
+
+.faults { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.fault { border: 0; border-top: 1px solid var(--rule-2); margin: 0; padding: 8px 0 0; min-width: 0; display: grid; gap: 6px; align-content: start; }
+.fault legend { font-family: var(--f-display); font-weight: 700; font-size: var(--s-0); padding: 0 6px 0 0; }
+.frow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-family: var(--f-display); font-size: var(--s-0); }
+.frow output { font-family: var(--f-mono); font-size: 0.78rem; margin-left: auto; font-variant-numeric: tabular-nums; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-display); font-size: var(--s-0); cursor: pointer; }
+.check input { width: 16px; height: 16px; accent-color: var(--ink); }
+.fhelp { font-size: 0.8rem; color: var(--muted); line-height: 1.45; }
+input[type="range"] { width: 100%; accent-color: var(--ink); }
+.rangewrap { position: relative; padding-bottom: 14px; }
+.rangewrap .cap { position: absolute; top: 22px; transform: translateX(-50%); font-family: var(--f-mono); font-size: 0.64rem; color: var(--bad); white-space: nowrap; border-left: 1px solid var(--bad); padding-left: 3px; }
+.factions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+
+.dbanner { font-family: var(--f-display); font-size: var(--s-0); font-weight: 600; padding: 8px 10px; border-radius: 3px; border-left: 4px solid; }
+.dbanner.ok { border-color: var(--good); background: color-mix(in srgb, var(--good) 10%, transparent); }
+.dbanner.warn { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.dbanner.bad { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
+.dgroup { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.dgroup small { font-family: var(--f-mono); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); }
+.dgroup.impl { border-top: 1px dashed var(--rule); padding-top: 10px; color: var(--ink-2); }
+.drow { border-bottom: 1px solid var(--rule-2); padding-bottom: 6px; display: grid; gap: 4px; }
+.drow summary { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; cursor: pointer; list-style: none; }
+.drow summary::-webkit-details-marker { display: none; }
+.dname { font-family: var(--f-display); font-size: var(--s-0); }
+.dname::before { content: "+"; display: inline-block; width: 1.1em; font-family: var(--f-mono); color: var(--muted); }
+details[open] .dname::before { content: "–"; }
+.dval { font-family: var(--f-mono); font-size: 0.82rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.dval small { display: block; font-weight: 500; color: var(--muted); font-size: 0.7rem; }
+.drow details p { font-size: 0.84rem; color: var(--ink-2); padding: 4px 0 2px 1.1em; }
+.badtxt { color: var(--bad); }
+.dots, .maprow { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
+.dot { font-family: var(--f-mono); font-size: 0.72rem; font-weight: 600; text-align: center; line-height: 22px; border-radius: 3px; }
+.dot.locked { background: color-mix(in srgb, var(--good) 20%, transparent); color: var(--good); }
+.dot.checking, .dot.searching { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.dot.nolock { background: var(--bad); color: var(--paper); }
+.dot.dim, .bar.dim { opacity: 0.35; }
+.mp { display: grid; text-align: center; font-family: var(--f-mono); font-size: 0.66rem; }
+.mp small { color: var(--muted); }
+.mp b { font-weight: 600; border-top: 3px solid var(--lc); padding-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bars { display: grid; gap: 2px; }
+.bar { display: grid; grid-template-columns: 1.4em minmax(0, 1fr); align-items: center; gap: 4px; font-family: var(--f-mono); font-size: 0.66rem; color: var(--muted); }
+.bar em { font-style: normal; text-align: right; }
+.track { position: relative; height: 8px; background: var(--rule-2); border-radius: 2px; }
+.track i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--lc); border-radius: 2px; }
+.capline { position: absolute; top: -2px; bottom: -2px; width: 0; border-left: 1px dashed var(--bad); }
+.hist { display: grid; grid-template-columns: repeat(17, minmax(0, 1fr)); gap: 2px; height: 46px; align-items: end; border-bottom: 1px solid var(--rule); }
+.hb { background: var(--cw-a); border-radius: 1px 1px 0 0; min-height: 0; }
+.hb.over { background: var(--bad); }
+.haxis { display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 0.64rem; color: var(--muted); }
+.dfoot { font-size: 0.76rem; color: var(--muted); }
+
+@media (max-width: 980px) { .panels { grid-template-columns: 1fr; } }
+@media (max-width: 520px) {
+  .faults { grid-template-columns: 1fr; }
+  .orow { grid-template-columns: 1fr; gap: 4px; }
+}
+
+.story { padding-inline: var(--gutter); padding-block: 24px 64px; display: grid; gap: 56px; max-width: 1160px; margin: 0 auto; }
+.story section { display: grid; grid-template-columns: minmax(0, 68ch) minmax(0, 1fr); gap: 16px 40px; align-items: start; }
+.story section > * { grid-column: 1; }
+.story section > .margin { grid-column: 2; grid-row: 2 / span 3; }
+.story section > figure.wide, .story section > .tablewrap { grid-column: 1 / -1; }
+.eyebrow { font-family: var(--f-mono); font-size: var(--s-1); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--ink); padding-top: 10px; }
+.story h2 { font-size: var(--s3); font-stretch: 82%; font-weight: 800; margin-top: -6px; }
+.story p { max-width: 68ch; }
+.steps { margin: 0; padding-left: 1.4em; display: grid; gap: 6px; max-width: 68ch; }
+.steps li::marker { font-family: var(--f-display); font-weight: 700; }
+figure { margin: 4px 0; display: grid; gap: 8px; min-width: 0; }
+.figwrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); padding: 12px; }
+figcaption { font-family: var(--f-display); font-size: var(--s-0); color: var(--muted); max-width: 70ch; }
+.margin { border-left: 2px solid var(--ink); padding: 2px 0 2px 16px; display: grid; gap: 6px; font-size: 0.95rem; color: var(--ink-2); }
+.margin h3 { font-size: var(--s-0); letter-spacing: 0.06em; text-transform: uppercase; font-stretch: 100%; }
+.showme { justify-self: start; }
+
+.cmp { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.cmp th, .cmp td { text-align: left; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.cmp thead th { font-family: var(--f-display); font-size: var(--s-1); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-bottom-color: var(--ink); }
+.cmp tbody th { font-family: var(--f-display); font-weight: 600; font-size: var(--s-0); white-space: nowrap; }
+.cmp.debug td:first-child { font-weight: 600; }
+.cmp code { white-space: nowrap; }
+.tablewrap { overflow-x: auto; }
+.tablewrap .cmp { min-width: 560px; }
+
+.refs { border-top: 1px solid var(--rule); padding-top: 16px; }
+.refs h2 { font-size: var(--s2); }
+.refs ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; font-size: 0.92rem; max-width: 80ch; }
+.fine { font-size: 0.84rem; color: var(--muted); }
+
+svg.fig { display: block; width: 100%; height: auto; font-family: var(--f-mono); }
+svg.fig text { fill: var(--ink-2); font-size: 11px; }
+svg.fig .lab { fill: var(--ink); font-weight: 600; }
+svg.fig .sm { font-size: 10px; fill: var(--muted); }
+svg.fig .cap { font-family: var(--f-display); font-size: 11px; fill: var(--muted); }
+svg.fig .mid { text-anchor: middle; }
+svg.fig .in { fill: var(--paper); font-size: 10px; font-weight: 600; }
+svg.fig .in.dark { fill: var(--ink); }
+svg.fig .ln { stroke-width: 6; fill: none; }
+svg.fig .ln.thin { stroke-width: 3; }
+svg.fig .dash { stroke: var(--muted); stroke-dasharray: 4 3; fill: none; }
+svg.fig .blk { fill: var(--scene-box); stroke: var(--scene-edge); }
+svg.fig .sheath { fill: color-mix(in srgb, var(--ink) 9%, transparent); stroke: var(--rule); }
+svg.fig .hdr { fill: var(--ink); }
+svg.fig .pay { fill: var(--cw-a); }
+svg.fig .seam { stroke: var(--paper); stroke-dasharray: 3 2; }
+svg.fig .arrow { stroke: var(--ink); stroke-width: 1.5; fill: none; }
+svg.fig .arrowhead { fill: var(--ink); stroke: none; }
+svg.fig .cwa { fill: var(--cw-a); }
+svg.fig .cwb { fill: var(--cw-b); }
+svg.fig .cm { fill: var(--ink-2); }
+svg.fig .um { stroke: none; }
+svg.fig .up { fill: var(--rule); }
+svg.fig .brk { stroke: var(--muted); fill: none; }
+svg.fig .trk { opacity: 0.35; }
+svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
+
+@media (max-width: 900px) {
+  .story section { grid-template-columns: minmax(0, 1fr); }
+  .story section > .margin { grid-column: 1; grid-row: auto; }
+}
+
+.site-foot { padding-inline: var(--gutter); padding-block: 18px 28px; border-top: 1px solid var(--rule); font-family: var(--f-mono); font-size: 0.72rem; color: var(--muted); }
+
+</style>
+<header class="mast">
+  <a class="brand" href="#top" id="top">Visual PCS <span>IEEE 802.3 · 200GBASE-R</span></a>
+  <nav aria-label="Sections">
+    <a href="#lab">Lane lab</a>
+    <a href="#lanes">Three lanes</a>
+    <a href="#tx">Transmit</a>
+    <a href="#mux">Bit-mux</a>
+    <a href="#rx">Receive</a>
+    <a href="#debug">Debugging</a>
+  </nav>
+</header>
+
+<section class="hero" aria-labelledby="hero-title">
+  <div>
+    <p class="kicker">Ethernet PCS, for people who already know SerDes</p>
+    <h1 id="hero-title">Following a PCS lane <em>from MAC to MAC across a 200G link</em></h1>
+  </div>
+  <p class="lede">A 200GBASE-R PCS splits one stream into 8 logical lanes, and the PMA squeezes those onto however many SerDes lanes the interface has. The receiver gets them back in whatever order and timing the wires deliver, and the alignment markers in the data put them back together. The lab below runs that whole path. Pick a lane, change the width, then break something.</p>
+</section>
+
+<dl class="terms">
+  <div class="term t-pcs"><dt><i></i>PCS lane</dt><dd>A logical stream the PCS creates and tracks. It is identified by the lane number in its alignment markers. 200GBASE-R has 8.</dd></div>
+  <div class="term t-pma"><dt><i></i>PMA lane</dt><dd>A lane at the PCS-to-PMA service interface. On transmit, PMA lane <i>i</i> carries PCS lane <i>i</i>. On receive, any PCS lane can arrive on any PMA lane.</dd></div>
+  <div class="term t-ser"><dt><i></i>SerDes lane</dt><dd>A physical electrical or optical lane: 8, 4 or 2 of them at 200G. Each one may bit-multiplex several PCS lanes.</dd></div>
+</dl>
+
+<section class="lab" id="lab" aria-labelledby="lab-title">
+  <div class="lab-head">
+    <h2 id="lab-title">Lane lab <span>200GBASE-R · 8 PCS lanes · one direction of the link</span></h2>
+    <p id="lab-summary" class="lab-summary" aria-live="polite"></p>
+  </div>
+
+  <div class="toolbar" role="toolbar" aria-label="Lane lab controls">
+    <div class="tgroup" aria-label="Playback">
+      <button type="button" id="btn-play" class="btn primary" aria-pressed="true" title="Pause or resume (Space)">Pause</button>
+      <button type="button" id="btn-step" class="btn" title="Advance one data unit (.)">Step</button>
+      <label class="field"><span>Speed</span>
+        <select id="sel-speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+      </label>
+    </div>
+    <div class="tgroup" aria-label="SerDes lane width">
+      <span class="tlabel" id="w-label">SerDes lanes</span>
+      <div class="seg" role="radiogroup" aria-labelledby="w-label">
+        <button type="button" role="radio" class="segbtn" data-width="8" id="w8">8 × NRZ</button>
+        <button type="button" role="radio" class="segbtn" data-width="4" id="w4">4 × PAM4</button>
+        <button type="button" role="radio" class="segbtn" data-width="2" id="w2">2 × PAM4</button>
+      </div>
+    </div>
+    <div class="tgroup" aria-label="Mux mapping">
+      <span class="tlabel" id="m-label">Mapping</span>
+      <div class="seg" role="radiogroup" aria-labelledby="m-label">
+        <button type="button" role="radio" class="segbtn" data-preset="grouped" id="mg">Grouped</button>
+        <button type="button" role="radio" class="segbtn" data-preset="interleaved" id="mi">Interleaved</button>
+        <button type="button" role="radio" class="segbtn" data-preset="remapped" id="mr">Remapped</button>
+      </div>
+    </div>
+    <div class="tgroup" aria-label="View">
+      <button type="button" id="btn-overview" class="btn" title="Show the whole link">Whole link</button>
+      <button type="button" id="btn-explore" class="btn" aria-pressed="false" title="Let drag and pinch move the 3D camera">Drag to explore</button>
+    </div>
+  </div>
+
+  <div class="lanepick" role="group" aria-label="Follow one PCS lane">
+    <span class="tlabel">Follow lane</span>
+    <button type="button" class="chip all" data-lane="-1" aria-pressed="true">All</button>
+    <button type="button" class="chip l0" data-lane="0" aria-pressed="false"><i></i>0</button>
+    <button type="button" class="chip l1" data-lane="1" aria-pressed="false"><i></i>1</button>
+    <button type="button" class="chip l2" data-lane="2" aria-pressed="false"><i></i>2</button>
+    <button type="button" class="chip l3" data-lane="3" aria-pressed="false"><i></i>3</button>
+    <button type="button" class="chip l4" data-lane="4" aria-pressed="false"><i></i>4</button>
+    <button type="button" class="chip l5" data-lane="5" aria-pressed="false"><i></i>5</button>
+    <button type="button" class="chip l6" data-lane="6" aria-pressed="false"><i></i>6</button>
+    <button type="button" class="chip l7" data-lane="7" aria-pressed="false"><i></i>7</button>
+    <span class="keys" aria-hidden="true">Keys: P pause · . step · 0–7 lane · Esc all</span>
+  </div>
+
+  <div class="viewport" id="viewport">
+    <div class="legend" aria-label="Legend">
+      <span><i class="lg-cube"></i>data unit on a PCS lane</span>
+      <span><i class="lg-am"></i>alignment marker</span>
+      <span><i class="lg-ring"></i>AM lock</span>
+      <span><i class="lg-sheath"></i>physical SerDes lane</span>
+      <span><i class="lg-bad"></i>error</span>
+    </div>
+    <p id="lab-hint" class="lab-hint" hidden></p>
+    <p class="vp-help" id="vp-help">Drag to pan · right-drag to rotate · Ctrl + scroll to zoom</p>
+    <noscript><p class="noscript">The lane lab needs JavaScript and WebGL.</p></noscript>
+  </div>
+
+  <nav class="rail" id="rail" aria-label="Pipeline stages"></nav>
+
+  <article class="stage-detail" id="stage-detail" aria-live="polite"></article>
+
+  <div class="panels">
+    <section class="panel" aria-labelledby="map-title">
+      <header><h3 id="map-title">PCS-to-SerDes mapping</h3><span class="tag std">Standard concept</span></header>
+      <div class="order" id="order-strip"></div>
+      <div class="tablewrap"><table class="maptable" id="map-table"></table></div>
+      <p class="note" id="map-note"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="scope-title">
+      <header><h3 id="scope-title">Bit scope</h3><span class="tag">Time-interleaved bits per SerDes lane</span></header>
+      <div class="scopewrap"><canvas id="scope" role="img" aria-label="Bit interleaving on each SerDes lane"></canvas></div>
+      <p class="note" id="scope-note"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="fault-title">
+      <header><h3 id="fault-title">Fault lab</h3><span class="tag">Simulated</span></header>
+      <div class="faults" id="faults"></div>
+    </section>
+
+    <section class="panel diag" aria-labelledby="diag-title">
+      <header><h3 id="diag-title">Diagnostics</h3><span class="tag">Conceptual readouts</span></header>
+      <div id="diag"></div>
+    </section>
+  </div>
+</section>
+
+<article class="story">
+<section id="lanes" aria-labelledby="lanes-title">
+  <p class="eyebrow">Part 1</p>
+  <h2 id="lanes-title">Three things called "lane"</h2>
+  <p>Most confusion in PCS debugging comes from one word doing three jobs. A <b>PCS lane</b> is a stream of data with an identity. A <b>PMA lane</b> is a position on the service interface between PCS and PMA. A <b>SerDes lane</b> is a physical path with a driver, a channel and a CDR. They line up one-to-one only in the 8-lane NRZ case.</p>
+  <figure class="wide">
+    <div class="figwrap" id="fig-nest"></div>
+    <figcaption>The 4-lane case. Eight PCS lanes cross the PMA service interface as eight PMA lanes; the PMA interleaves them two per SerDes lane.</figcaption>
+  </figure>
+  <div class="tablewrap">
+    <table class="cmp">
+      <caption class="sr">Comparison of PCS, PMA and SerDes lanes</caption>
+      <thead><tr><th scope="col"></th><th scope="col">PCS lane</th><th scope="col">PMA lane</th><th scope="col">SerDes lane</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">What it is</th><td>Logical stream of FEC symbols</td><td>Position at the PCS/PMA service interface</td><td>Physical electrical or optical lane</td></tr>
+        <tr><th scope="row">Identity comes from</th><td>Lane number in its alignment markers</td><td>Its index on the interface</td><td>The pin, trace, or wavelength</td></tr>
+        <tr><th scope="row">Count at 200G</th><td>Always 8</td><td>8 at the PCS boundary</td><td>8, 4 or 2</td></tr>
+        <tr><th scope="row">Rate</th><td>26.5625 Gb/s</td><td>26.5625 Gb/s</td><td>26.5625, 53.125 or 106.25 Gb/s</td></tr>
+        <tr><th scope="row">Order on receive</th><td>Restored by the PCS</td><td>Arbitrary</td><td>Whatever the board routes</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <aside class="margin">
+    <h3>Where a retimer sits</h3>
+    <p>A retimer or gearbox is a PMA. It recovers each SerDes lane, demultiplexes it into PCS-lane-rate streams, and multiplexes them out again, possibly to a different width. It moves bits without decoding them, so it does not need to know which PCS lane is which. What it must do is keep a fixed mapping while the link is up and stay inside the skew budget.</p>
+  </aside>
+</section>
+
+<section id="tx" aria-labelledby="tx-title">
+  <p class="eyebrow">Part 2</p>
+  <h2 id="tx-title">Transmit: one stream becomes eight lanes</h2>
+  <p>On transmit, the PCS works on a single aggregate stream until the very last step. The order is defined by IEEE 802.3 Clause 119, and it matters for debugging because it decides what each later stage can see.</p>
+  <ol class="steps">
+    <li><b>64B/66B encode</b> each 8 bytes from 200GMII into a 66-bit block. Idles are deleted here to make room for alignment markers.</li>
+    <li><b>Transcode</b> four 66-bit blocks into one 256B/257B block. Same data, packed tighter. This is a transcode of the 64B/66B blocks, not a second line code.</li>
+    <li><b>Scramble</b> the 257-bit blocks.</li>
+    <li><b>Insert alignment markers</b>, one per PCS lane, as a group. They go in after the scrambler, so they stay recognizable in raw lane data.</li>
+    <li><b>Pre-FEC distribution</b>: split the stream 10 bits at a time between two Reed-Solomon encoders.</li>
+    <li><b>RS(544,514) encode</b> into codewords A and B. AMs are inside the codewords, so FEC protects them.</li>
+    <li><b>Symbol distribution</b>: deal 10-bit symbols from both codewords round-robin onto the 8 PCS lanes.</li>
+  </ol>
+  <figure>
+    <div class="figwrap" id="fig-transcode"></div>
+    <figcaption>Transcoding packs the four 2-bit sync headers into one header bit plus a little control information. The 257-bit block carries the same 256 payload bits.</figcaption>
+  </figure>
+  <p>The last step is why the receiver has so much work to do. Each PCS lane carries a slice of every codeword, so nothing can be decoded until all 8 lanes have been found, lined up and put in order.</p>
+  <figure>
+    <div class="figwrap" id="fig-dist"></div>
+    <figcaption>Illustrative symbol distribution. Symbols from codewords A and B alternate across lanes and over time in a checkerboard. Every codeword spans all 8 PCS lanes, and an error burst on one physical lane is split between two codewords.</figcaption>
+  </figure>
+  <button type="button" class="btn showme" data-stage="3">Show stage 3 in the lab</button>
+</section>
+
+<section id="am" aria-labelledby="am-title">
+  <p class="eyebrow">Part 3</p>
+  <h2 id="am-title">Alignment markers carry the lane identity</h2>
+  <p>Each PCS lane gets a 120-bit alignment marker at a fixed interval. The <b>common</b> bytes are the same on every lane, so the receiver can find AMs without knowing anything else. The <b>unique</b> bytes differ per lane and tell it which PCS lane it found. The pad bytes are ignored on receive.</p>
+  <figure>
+    <div class="figwrap" id="fig-am"></div>
+    <figcaption>One alignment marker, 15 bytes. The eight markers go in together, so they leave the transmitter lined up across all lanes.</figcaption>
+  </figure>
+  <p>In 200GBASE-R the AM group repeats every 81,920 257-bit blocks of the aggregate stream, about 2.6 Mbit or 99 µs on each PCS lane. The lab shrinks that spacing so you can see markers pass. Because AMs are detected in raw lane data before FEC decoding, the receiver tolerates a few bit errors in them.</p>
+</section>
+
+<section id="mux" aria-labelledby="mux-title">
+  <p class="eyebrow">Part 4</p>
+  <h2 id="mux-title">PMA bit-multiplexing</h2>
+  <p>When there are fewer SerDes lanes than PCS lanes, the PMA interleaves PCS lanes <b>bit by bit</b>. Four SerDes lanes carry two PCS lanes each; two carry four each. The PMA picks which PCS lanes share a SerDes lane and holds that choice for as long as the link is up. A given PCS lane never wanders to another SerDes lane during normal operation.</p>
+  <figure>
+    <div class="figwrap" id="fig-mux"></div>
+    <figcaption>Two PCS lanes on one PAM4 SerDes lane. Bits alternate, and each PAM4 symbol carries one bit from each.</figcaption>
+  </figure>
+  <p>Two consequences matter in the lab. A SerDes lane's skew is shared by every PCS lane it carries, so the lanes slip together. And one bad PAM4 symbol can hit two PCS lanes at once, which is part of why per-PCS-lane error counts tend to rise in groups.</p>
+  <button type="button" class="btn showme" data-stage="5">Show the bit-mux in the lab</button>
+</section>
+
+<section id="rx" aria-labelledby="rx-title">
+  <p class="eyebrow">Part 5</p>
+  <h2 id="rx-title">Receive: find, line up, reorder, then decode</h2>
+  <p>The RX PMA recovers each SerDes lane and demultiplexes it, but it cannot tell PCS lanes apart, and the bit phase it starts on is arbitrary. So the RX PCS gets 8 streams in an unknown order with unknown relative delay. It then:</p>
+  <ol class="steps">
+    <li><b>Locks</b> on each PMA lane by finding the common AM pattern repeating at the right spacing, and reads the lane number from the unique bytes.</li>
+    <li><b>Deskews</b> by buffering early lanes until all AMs line up. 802.3 budgets about 180 ns of skew at the PCS receive input.</li>
+    <li><b>Reorders</b> lanes into PCS lane order 0 to 7.</li>
+    <li>Sets <code>align_status</code> true. Only now can it de-interleave codewords, run <b>RS(544,514) decode</b>, remove AMs, descramble, reverse the transcode and decode 64B/66B.</li>
+  </ol>
+  <figure>
+    <div class="figwrap" id="fig-deskew"></div>
+    <figcaption>Before deskew, AMs reach the PCS at different times. After deskew they line up, and the lanes are reordered by the lane number each AM carries.</figcaption>
+  </figure>
+  <p>Deskew and reorder have to come before FEC, because every codeword is spread across all 8 lanes. A single missing lane means no codewords at all, which is why one bad SerDes lane takes the whole link down instead of just its share of the bandwidth.</p>
+  <button type="button" class="btn showme" data-stage="8">Show RX alignment in the lab</button>
+</section>
+
+<section id="debug" aria-labelledby="debug-title">
+  <p class="eyebrow">Part 6</p>
+  <h2 id="debug-title">Reading the link from the bottom up</h2>
+  <p>Work in the same order the receiver does. SerDes signal first (CDR lock, signal detect, eye or SNR). Then PCS alignment. Then FEC margin. Then the MAC. Each layer only means something once the one below it is healthy.</p>
+  <div class="tablewrap">
+    <table class="cmp debug">
+      <caption class="sr">Symptoms, what they suggest, and what to check next</caption>
+      <thead><tr><th scope="col">What you see</th><th scope="col">What it suggests</th><th scope="col">Check next</th></tr></thead>
+      <tbody>
+        <tr><td>No AM lock on the PCS lanes of one SerDes lane</td><td>That physical lane is not delivering clean bits</td><td>CDR lock, signal detect, polarity, PRBS on that lane</td></tr>
+        <tr><td>No AM lock on one PCS lane, its SerDes neighbours fine</td><td>Lane content problem rather than signal</td><td>Mux or gearbox configuration, test pattern or loopback left enabled</td></tr>
+        <tr><td>All lanes locked, <code>align_status</code> false</td><td>Skew beyond the deskew budget, or a lane number repeated</td><td>Per-lane AM arrival offset; lane mapping for duplicates</td></tr>
+        <tr><td>Lane mapping differs after each reset</td><td>Normal demux start-up phase</td><td>Nothing, unless lane numbers repeat or go missing</td></tr>
+        <tr><td>Corrected codewords rising, uncorrectable zero</td><td>Normal on PAM4; FEC doing its job</td><td>Trend over time, per-lane symbol errors, codeword histogram</td></tr>
+        <tr><td>Symbol errors concentrated on some PCS lanes</td><td>One weak SerDes lane</td><td>Map those PCS lanes to their SerDes lane; tune that lane</td></tr>
+        <tr><td>Uncorrectable codewords increasing</td><td>Frames are being corrupted</td><td>Pre-FEC error rate on every lane; MAC FCS error counters</td></tr>
+        <tr><td>FCS errors at the MAC, FEC counters clean</td><td>Problem above the PCS</td><td>MAC, host interface, or the far-end transmitter</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <aside class="margin">
+    <h3>Standard concept or vendor telemetry?</h3>
+    <p>IEEE 802.3 defines the ideas: alignment status, per-lane AM lock, the lane mapping, corrected and uncorrected codeword counts, and per-lane FEC symbol error counts, along with management variables for them. Register addresses, counter widths, clear-on-read behaviour, skew readouts, error histograms and BER estimates are up to each device. The lab's diagnostics panel keeps the two groups apart.</p>
+  </aside>
+  <button type="button" class="btn showme" data-stage="9" data-fault="noise">Try a noisy lane in the lab</button>
+</section>
+
+<section id="scale" aria-labelledby="scale-title">
+  <p class="eyebrow">Part 7</p>
+  <h2 id="scale-title">Beyond 200G</h2>
+  <p><b>400GBASE-R</b> uses the same Clause 119 PCS with 16 PCS lanes instead of 8, and AM groups every 163,840 257-bit blocks. Everything above carries over at twice the width. For 400G, 16 PCS lanes allow 16, 8, 4, 2 or 1 physical lanes; at 200G, 8 PCS lanes allow 8, 4, 2 or 1.</p>
+  <p><b>800G</b> is often pictured as two 400G flows side by side, and the 800GBASE-R PCS does reuse 400G-style FEC groups. Treat that as a mental model. It is not a statement about how any particular device or PHY type is built. Newer PHYs with 200 Gb/s per physical lane also add sublayers not shown here.</p>
+</section>
+
+<section id="refs" aria-labelledby="refs-title" class="refs">
+  <h2 id="refs-title">Sources</h2>
+  <ul>
+    <li>IEEE Std 802.3, Clause 119 (200GBASE-R and 400GBASE-R PCS), Clause 120 (PMA), Clause 116 (architecture and skew budgets), Clause 45 (management). <a href="https://standards.ieee.org/ieee/802.3/10422/">IEEE 802.3-2022</a></li>
+    <li><a href="https://ethernetalliance.org/blog/2018/03/28/a-deep-dive-into-the-802-3bs-200gbase-r-and-400gbase-r-pcspma/">A Deep Dive into the 802.3bs 200GBASE-R and 400GBASE-R PCS/PMA</a>, Ethernet Alliance</li>
+    <li><a href="https://www.ieee802.org/3/bs/public/16_03/butter_3bs_02_0316.pdf">Alignment marker mapping and insertion</a>, IEEE P802.3bs task force</li>
+    <li><a href="https://www.ieee802.org/3/bs/">IEEE P802.3bs 200 Gb/s and 400 Gb/s Ethernet Task Force</a></li>
+  </ul>
+  <p class="fine">Counts and timings in the lab are scaled so you can watch them. AM spacing, lock thresholds and error rates are illustrative. Diagnostic readouts are conceptual; no register addresses or vendor names are implied.</p>
+</section>
+</article>
+
+<footer class="site-foot">
+  <p>Visual PCS · a teaching model of the IEEE 802.3 200GBASE-R PCS. Simplified for clarity; check the standard for normative behaviour.</p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+/* ---- model.js ---- */
+/* Pure model of the 200GBASE-R lane picture: PCS-to-SerDes mapping, RX demux
+   order, skew/deskew timing and AM lock. No DOM, no Three.js, so node tests can
+   load it directly. Everything hangs off globalThis.PCS. */
+(function (P) {
+  'use strict';
+
+  P.N_PCS = 8;                 // 200GBASE-R PCS lanes
+  P.DESKEW_CAP_NS = 180;       // skew budget at the PCS receive input (IEEE 802.3 Table 116-7)
+  P.AM_LOSS_COUNT = 3;         // conceptual: consecutive bad AMs before lock is dropped
+  P.AM_ACQUIRE_COUNT = 2;      // conceptual: matching AMs at the right spacing to lock
+  P.AM_PERIOD = 10;            // visual units between AMs (the real spacing is about 2.6 Mbit per lane)
+  P.GAP = 1.0;                 // visual spacing of data units on a PCS lane
+
+  P.WIDTHS = {
+    8: { lanes: 8, mod: 'NRZ', baud: 26.5625, gbps: 26.5625, ex: '200GAUI-8' },
+    4: { lanes: 4, mod: 'PAM4', baud: 26.5625, gbps: 53.125,
+         ex: '200GAUI-4, 200GBASE-SR4 / DR4 / FR4 / LR4 / CR4 / KR4' },
+    2: { lanes: 2, mod: 'PAM4', baud: 53.125, gbps: 106.25, ex: '200GAUI-2, 200GBASE-CR2 / KR2' }
+  };
+
+  P.PRESETS = {
+    grouped: 'Grouped',
+    interleaved: 'Interleaved',
+    remapped: 'Remapped'
+  };
+
+  // One example of an arbitrary fixed assignment (e.g. a gearbox mux table or
+  // board-level swizzle). Position i in the mux order carries PCS lane REMAP[i].
+  P.REMAP_ORDER = [5, 2, 7, 0, 3, 6, 1, 4];
+
+  // Small intrinsic skew per physical lane, so deskew always has work to do.
+  P.BASE_SKEW_NS = [6, 14, 3, 11, 9, 2, 15, 7];
+
+  // Visual layout along x (TX on the left, RX on the right).
+  P.X = {
+    lanesStart: 32.5, muxIn: 44, mux: [44.5, 48.5], chan: [49.5, 66.5],
+    swap: [56, 60], demux: [67.5, 70.5], amLock: 72.5, deskew: [74.5, 78.5],
+    reorder: [79.5, 83.5], lanesEnd: 84.5, noiseAt: 54
+  };
+  P.LANE_SP = 1.4;
+  P.nsToUnits = function (ns) { return ns * 6 / 250; };
+
+  P.yPcs = function (i) { return (3.5 - i) * P.LANE_SP; };
+  P.ySerdes = function (j, width) {
+    var sp = (P.N_PCS * P.LANE_SP) / width;
+    return ((width - 1) / 2 - j) * sp;
+  };
+
+  // PCS lane -> TX SerDes lane and its bit slot within the multiplex.
+  P.mapLanes = function (width, preset) {
+    var k = P.N_PCS / width, out = [];
+    for (var p = 0; p < P.N_PCS; p++) {
+      var serdes, slot;
+      if (preset === 'interleaved') { serdes = p % width; slot = Math.floor(p / width); }
+      else if (preset === 'remapped') {
+        var i = P.REMAP_ORDER.indexOf(p);
+        serdes = Math.floor(i / k); slot = i % k;
+      } else { serdes = Math.floor(p / k); slot = p % k; }
+      out.push({ pcs: p, txPma: p, serdes: serdes, slot: slot });
+    }
+    return out;
+  };
+
+  // Full TX -> RX picture for one configuration.
+  // cfg: { width, preset, swap, rot: [per RX SerDes demux rotation], skewNs: [per physical lane] }
+  P.buildLink = function (cfg) {
+    var width = cfg.width, k = P.N_PCS / width;
+    var map = P.mapLanes(width, cfg.preset);
+    var chan = [];
+    for (var s = 0; s < width; s++) chan[s] = s;
+    if (cfg.swap && width >= 2) { chan[0] = 1; chan[1] = 0; }
+    var lanes = map.map(function (m) {
+      var rx = chan[m.serdes];
+      var rot = cfg.rot ? ((cfg.rot[rx] || 0) % k) : 0;
+      return {
+        pcs: m.pcs, txPma: m.txPma, serdes: m.serdes, slot: m.slot,
+        rxSerdes: rx, rxPma: rx * k + (m.slot + rot) % k,
+        skewNs: cfg.skewNs[m.serdes] || 0
+      };
+    });
+    var minSk = Math.min.apply(null, lanes.map(function (l) { return l.skewNs; }));
+    var spread = 0;
+    lanes.forEach(function (l) {
+      l.relSkewNs = l.skewNs - minSk;
+      l.deskewFail = l.relSkewNs > P.DESKEW_CAP_NS;
+      spread = Math.max(spread, l.relSkewNs);
+    });
+    var byRxPma = [];
+    lanes.forEach(function (l) { byRxPma[l.rxPma] = l.pcs; });
+    return { width: width, k: k, lanes: lanes, spreadNs: spread,
+             deskewOk: spread <= P.DESKEW_CAP_NS, byRxPma: byRxPma };
+  };
+
+  P.lanesOnSerdes = function (link, s) {
+    return link.lanes.filter(function (l) { return l.serdes === s; })
+      .sort(function (a, b) { return a.slot - b.slot; });
+  };
+
+  // Delay segments: each spreads `delay` units of lag uniformly over [x0, x1].
+  // u is distance travelled; the return value is the drawn x position.
+  P.warp = function (u, segs) {
+    var shift = 0;
+    for (var i = 0; i < segs.length; i++) {
+      var g = segs[i], len = g.x1 - g.x0, uIn = g.x0 + shift;
+      if (u <= uIn) return u - shift;
+      if (u <= g.x1 + shift + g.delay) return g.x0 + (u - uIn) * len / (len + g.delay);
+      shift += g.delay;
+    }
+    return u - shift;
+  };
+
+  P.unwarp = function (x, segs) {
+    var shift = 0;
+    for (var i = 0; i < segs.length; i++) {
+      var g = segs[i], len = g.x1 - g.x0;
+      if (x <= g.x0) return x + shift;
+      if (x <= g.x1) return g.x0 + shift + (x - g.x0) * (len + g.delay) / len;
+      shift += g.delay;
+    }
+    return x + shift;
+  };
+
+  // Per-lane delay segments: mux phase, channel skew, demux phase removal, deskew.
+  P.laneSegments = function (link, lane) {
+    var X = P.X, phase = lane.slot * P.GAP / link.k;
+    var d = P.nsToUnits(lane.relSkewNs);
+    var D = 0;
+    link.lanes.forEach(function (l) {
+      if (!l.deskewFail) D = Math.max(D, P.nsToUnits(l.relSkewNs));
+    });
+    return [
+      { x0: X.mux[0], x1: X.mux[1], delay: phase },
+      { x0: X.chan[0], x1: X.chan[1], delay: d },
+      { x0: X.demux[0], x1: X.demux[1], delay: -phase },
+      { x0: X.deskew[0], x1: X.deskew[1], delay: lane.deskewFail ? 0 : D - d }
+    ];
+  };
+
+  // AM lock state step for one lane. Returns the same object, updated.
+  P.amLockStep = function (L, valid) {
+    if (L.state === 'locked') {
+      if (valid) L.bad = 0;
+      else if (++L.bad >= P.AM_LOSS_COUNT) { L.state = 'searching'; L.good = 0; L.bad = 0; L.lost = true; }
+    } else if (valid) {
+      if (++L.good >= P.AM_ACQUIRE_COUNT) { L.state = 'locked'; L.bad = 0; L.lost = false; }
+    } else { L.good = 0; L.lost = true; }
+    return L;
+  };
+
+  P.lockView = function (L) {
+    if (L.state === 'locked') return L.bad ? 'checking' : 'locked';
+    return L.lost ? 'nolock' : 'searching';
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- fec.js ---- */
+/* Statistical stand-in for RS(544,514) decoding. Each tick represents a batch of
+   codewords; per-lane symbol error rates set how many symbol errors land in each
+   codeword. t = 15 symbols are correctable. No Reed-Solomon math is done here. */
+(function (P) {
+  'use strict';
+
+  P.RS_N = 544;
+  P.RS_K = 514;
+  P.RS_T = 15;
+  P.SYM_PER_LANE = P.RS_N / P.N_PCS;  // 68 symbols of each codeword per PCS lane (illustrative)
+  P.CW_PER_SEC = 212.5e9 / (P.RS_N * 10); // ~39 M codewords/s across the PCS
+  P.BASE_SER = 2e-7;
+
+  var LF = [0];
+  for (var i = 1; i <= 80; i++) LF[i] = LF[i - 1] + Math.log(i);
+  function pmf(k, lam) { return lam <= 0 ? (k === 0 ? 1 : 0) : Math.exp(k * Math.log(lam) - lam - LF[k]); }
+
+  // Seeded PRNG (mulberry32) so tests are repeatable.
+  P.rng = function (seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+
+  P.poisson = function (mean, rnd) {
+    if (mean <= 0) return 0;
+    if (mean > 40) {
+      var u = Math.max(rnd(), 1e-12), v = rnd();
+      var z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+      return Math.max(0, Math.round(mean + z * Math.sqrt(mean)));
+    }
+    var L = Math.exp(-mean), k = 0, p = 1;
+    do { k++; p *= rnd(); } while (p > L);
+    return k - 1;
+  };
+
+  // Noise slider 0..100 -> extra SER on the noisy lane(s). 0 adds nothing.
+  P.noiseToSer = function (n) { return n <= 0 ? 0 : 1e-6 * Math.pow(10, n * 4.7 / 100); };
+  P.CW_PER_TICK = Math.round(P.CW_PER_SEC / 1000); // one tick = 1 ms of link time
+
+  // Expected per-codeword outcome for per-PCS-lane SER array.
+  P.fecExpect = function (serByLane) {
+    var lam = 0;
+    serByLane.forEach(function (s) { lam += Math.min(s, 1) * P.SYM_PER_LANE; });
+    var bins = [], pc = 0, ec = 0;
+    for (var k = 0; k <= P.RS_T; k++) { bins[k] = pmf(k, lam); if (k >= 1) { pc += bins[k]; ec += k * bins[k]; } }
+    var pu = 0, eu = 0;
+    for (k = P.RS_T + 1; k <= 80; k++) { var q = pmf(k, lam); pu += q; eu += k * q; }
+    return { lam: lam, bins: bins, pCorr: pc, pUncorr: pu, symCorr: ec, symUncorr: eu };
+  };
+
+  // Sample one batch of `n` codewords. Returns counter deltas.
+  P.fecTick = function (serByLane, n, rnd) {
+    var e = P.fecExpect(serByLane);
+    var hist = [], corr = 0, sym = 0;
+    for (var k = 0; k <= P.RS_T; k++) {
+      hist[k] = k === 0 ? 0 : P.poisson(n * e.bins[k], rnd);
+      if (k) { corr += hist[k]; sym += k * hist[k]; }
+    }
+    var unc = P.poisson(n * e.pUncorr, rnd);
+    hist[P.RS_T + 1] = unc;
+    sym += Math.round(unc * (e.pUncorr > 0 ? e.symUncorr / e.pUncorr : P.RS_T + 1));
+    hist[0] = Math.max(0, n - corr - unc);
+    // Split symbol errors across lanes in proportion to each lane's SER.
+    var tot = serByLane.reduce(function (a, b) { return a + b; }, 0);
+    var perLane = serByLane.map(function (s) {
+      if (!tot) return 0;
+      var share = sym * s / tot, f = Math.floor(share);
+      return f + (rnd() < share - f ? 1 : 0);
+    });
+    return { codewords: n, corrected: corr, uncorrectable: unc, symbolErrors: sym,
+             perLane: perLane, hist: hist, lam: e.lam };
+  };
+
+  // Deterministic hash in [0,1) used to place visual error marks.
+  P.hash = function (a, b) {
+    var h = Math.imul(a ^ 0x9E3779B9, 0x85EBCA6B) ^ Math.imul(b + 0x632BE5AB, 0xC2B2AE35);
+    h ^= h >>> 13; h = Math.imul(h, 0x27D4EB2F); h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- state.js ---- */
+/* App state and the simulation clock: AM arrival events drive lock/deskew,
+   periodic ticks drive the FEC counters. */
+(function (P) {
+  'use strict';
+
+  function freshLock(state) { return { state: state, good: 0, bad: 0, lost: false }; }
+
+  var S = P.state = {
+    playing: true, speed: 1, u: 320,
+    width: 4, preset: 'grouped',
+    selected: -1, stage: null,
+    faults: { skewLane: 1, skewNs: 0, amLane: 3, amLoss: false, losLane: 0, los: false,
+              noiseLane: -1, noise: 0, swap: false },
+    rot: [0, 0, 0, 0, 0, 0, 0, 0],
+    lock: [], lastAm: [], deskewSeen: true, align: true,
+    c: null, simMs: 0, link: null
+  };
+  for (var i = 0; i < P.N_PCS; i++) { S.lock.push(freshLock('locked')); S.lastAm.push(-1); }
+
+  var listeners = [];
+  P.on = function (fn) { listeners.push(fn); };
+  P.emit = function (what) { listeners.forEach(function (fn) { fn(what); }); };
+
+  P.resetCounters = function () {
+    S.c = { corrected: 0, uncorrectable: 0, symbolErrors: 0, codewords: 0,
+            symLane: [0, 0, 0, 0, 0, 0, 0, 0], hist: new Array(P.RS_T + 2).fill(0) };
+    S.simMs = 0; S.recentUnc = 0;
+    P.emit('tick');
+  };
+  P.resetCounters();
+
+  P.skewArray = function () {
+    var f = S.faults;
+    return P.BASE_SKEW_NS.slice(0, S.width).map(function (b, s) {
+      return b + (s === f.skewLane ? f.skewNs : 0);
+    });
+  };
+
+  P.rebuild = function (relock) {
+    if (S.faults.skewLane >= S.width) S.faults.skewLane = S.width - 1;
+    if (S.faults.losLane >= S.width) S.faults.losLane = 0;
+    if (S.faults.noiseLane >= S.width) S.faults.noiseLane = -1;
+    if (relock) {
+      // A new demux start-up phase on each RX SerDes lane: the PMA lane order
+      // can come up differently every time; only the AMs tell the PCS lanes apart.
+      var k = P.N_PCS / S.width;
+      S.rot = S.rot.map(function () { return Math.floor(Math.random() * k); });
+      S.lock = S.lock.map(function () { return freshLock('searching'); });
+      S.deskewSeen = false;
+    }
+    S.link = P.buildLink({ width: S.width, preset: S.preset, swap: S.faults.swap,
+                           rot: S.rot, skewNs: P.skewArray() });
+    S.segs = S.link.lanes.map(function (l) { return P.laneSegments(S.link, l); });
+    S.lastAm = S.link.lanes.map(function (l, p) { return amIndexAt(p); });
+    updateAlign();
+    P.emit('link');
+  };
+
+  // Faults that only change skew keep the current lock state.
+  P.refreshSkew = function () {
+    var keep = S.lastAm.slice();
+    S.link = P.buildLink({ width: S.width, preset: S.preset, swap: S.faults.swap,
+                           rot: S.rot, skewNs: P.skewArray() });
+    S.segs = S.link.lanes.map(function (l) { return P.laneSegments(S.link, l); });
+    S.lastAm = keep;
+    P.emit('link');
+  };
+
+  P.serByLane = function () {
+    var f = S.faults, extra = P.noiseToSer(f.noise);
+    return S.link.lanes.map(function (l) {
+      var s = P.BASE_SER;
+      if (f.noise > 0 && (f.noiseLane < 0 || l.serdes === f.noiseLane)) s += extra;
+      return s;
+    });
+  };
+
+  P.amValid = function (p) {
+    var f = S.faults, l = S.link.lanes[p];
+    if (f.amLoss && f.amLane === p) return false;
+    if (f.los && l.serdes === f.losLane) return false;
+    return true;
+  };
+
+  // Sequence index n of the newest data unit on PCS lane p that has passed x.
+  P.seqAt = function (p, x) {
+    var U = P.unwarp(x, S.segs[p]);
+    return Math.floor((P.X.lanesStart + S.u - U) / P.GAP);
+  };
+  function amIndexAt(p) { return Math.floor(P.seqAt(p, P.X.amLock) / P.AM_PERIOD); }
+
+  function updateAlign() {
+    var all = S.lock.every(function (L) { return L.state === 'locked'; });
+    var was = S.align;
+    S.align = all && S.deskewSeen;
+    if (was !== S.align) P.emit('align');
+  }
+
+  // Called every frame: process AMs that reached the RX lock point.
+  P.processAms = function () {
+    var changed = false;
+    for (var p = 0; p < P.N_PCS; p++) {
+      var idx = amIndexAt(p);
+      if (idx <= S.lastAm[p]) continue;
+      var n = Math.min(idx - S.lastAm[p], 3);
+      S.lastAm[p] = idx;
+      for (var j = 0; j < n; j++) {
+        var before = P.lockView(S.lock[p]);
+        P.amLockStep(S.lock[p], P.amValid(p));
+        if (P.lockView(S.lock[p]) !== before) changed = true;
+      }
+      if (S.deskewSeen !== S.link.deskewOk) { S.deskewSeen = S.link.deskewOk; changed = true; }
+    }
+    if (changed) { updateAlign(); P.emit('lock'); }
+  };
+
+  var rnd = P.rng(2024);
+  P.tick = function () {
+    S.simMs += 1;
+    if (!S.align) { P.emit('tick'); return null; }
+    var d = P.fecTick(P.serByLane(), P.CW_PER_TICK, rnd), c = S.c;
+    c.corrected += d.corrected; c.uncorrectable += d.uncorrectable;
+    c.symbolErrors += d.symbolErrors; c.codewords += d.codewords;
+    d.perLane.forEach(function (v, i) { c.symLane[i] += v; });
+    d.hist.forEach(function (v, i) { c.hist[i] += v; });
+    S.lastTick = d;
+    S.recentUnc = (S.recentUnc || 0) * 0.95 + d.uncorrectable;   // ~2 s window at 1x
+    P.emit('tick');
+    return d;
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- paths.js ---- */
+/* Geometry of the lane journey: y/z of each PCS lane as a function of x. */
+(function (P) {
+  'use strict';
+  function ss(a, b, x) {
+    var t = Math.min(Math.max((x - a) / (b - a), 0), 1);
+    return t * t * (3 - 2 * t);
+  }
+  P.ss = ss;
+
+  // y of the physical SerDes lane `s` (TX numbering), including an optional
+  // board-level swap of lanes 0 and 1 in the middle of the channel.
+  P.cableY = function (link, s, x) {
+    var X = P.X, y = P.ySerdes(s, link.width);
+    if (link.lanes.some(function (l) { return l.rxSerdes !== l.serdes; }) && s < 2) {
+      var other = P.ySerdes(1 - s, link.width);
+      y += (other - y) * ss(X.swap[0], X.swap[1], x);
+    }
+    return y;
+  };
+
+  P.yPath = function (link, lane, x) {
+    var X = P.X;
+    var y0 = P.yPcs(lane.pcs);
+    if (x <= X.mux[0]) return y0;
+    var ySd = P.cableY(link, lane.serdes, x);
+    if (x <= X.mux[1]) return y0 + (ySd - y0) * ss(X.mux[0], X.mux[1], x);
+    if (x <= X.demux[0]) return ySd;
+    var yRx = P.yPcs(lane.rxPma);
+    if (x <= X.demux[1]) return ySd + (yRx - ySd) * ss(X.demux[0], X.demux[1], x);
+    if (x <= X.reorder[0]) return yRx;
+    var yOut = P.yPcs(lane.pcs);
+    return yRx + (yOut - yRx) * ss(X.reorder[0], X.reorder[1], Math.min(x, X.reorder[1]));
+  };
+
+  // Lanes moving in the reorder crossbar bow out in z so crossings stay readable.
+  P.zPath = function (link, lane, x) {
+    var X = P.X, z = 0;
+    if (x > X.reorder[0] && x < X.reorder[1]) {
+      var d = lane.pcs - lane.rxPma;
+      z += Math.sin(Math.PI * (x - X.reorder[0]) / (X.reorder[1] - X.reorder[0])) * d * 0.28;
+    }
+    if (x > X.mux[0] && x < X.mux[1] && link.k > 1) {
+      z += Math.sin(Math.PI * (x - X.mux[0]) / (X.mux[1] - X.mux[0])) * (lane.slot - (link.k - 1) / 2) * 0.35;
+    }
+    return z;
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- content.js ---- */
+/* Stage definitions: where each numbered stage sits in the scene and what the
+   detail panel says about it. Sub-boxes are the standard function names. */
+(function (P) {
+  'use strict';
+
+  // Sub-blocks drawn in the scene. lane: true spans the 8-lane stack.
+  P.BOXES = [
+    { x: [0, 4], name: 'MAC / RS', stage: 1 },
+    { x: [5, 9], name: '64B/66B encode', stage: 2 },
+    { x: [10.5, 14.5], name: '256B/257B transcode', stage: 2 },
+    { x: [16, 19], name: 'Scramble', stage: 3 },
+    { x: [20, 23], name: 'AM insertion', stage: 3 },
+    { x: [24.5, 26.5], name: 'Pre-FEC distribution', stage: 3, short: 'Pre-FEC dist.' },
+    { x: [27, 30.5], name: 'RS(544,514) encode', stage: 3, short: 'RS encode' },
+    { x: [31, 32.5], name: 'Symbol distribution', stage: 3, lane: true, short: 'Symbol dist.' },
+    { x: [44.5, 48.5], name: 'TX PMA bit-mux', stage: 5, lane: true },
+    { x: [67.5, 70.5], name: 'RX PMA demux', stage: 7, lane: true },
+    { x: [71.5, 73.5], name: 'Alignment lock', stage: 8, lane: true, short: 'AM lock' },
+    { x: [74.5, 78.5], name: 'Deskew', stage: 8, lane: true },
+    { x: [79.5, 83.5], name: 'Lane reorder', stage: 8, lane: true },
+    { x: [85, 87], name: 'De-interleave', stage: 9, short: 'De-intlv' },
+    { x: [87.5, 91], name: 'RS(544,514) decode', stage: 9, short: 'RS decode', fec: true },
+    { x: [91.5, 93.5], name: 'Post-FEC interleave', stage: 9, short: 'Post-FEC' },
+    { x: [94, 97], name: 'AM removal', stage: 9 },
+    { x: [98, 101], name: 'Descramble', stage: 9 },
+    { x: [102, 106], name: 'Reverse transcode', stage: 9 },
+    { x: [107, 111], name: '64B/66B decode', stage: 9 },
+    { x: [112, 116], name: 'RS / MAC', stage: 9 }
+  ];
+
+  P.STAGES = [
+    { n: 1, side: 'TX', title: 'TX MAC and 200GMII', span: [-1, 6],
+      body: '<p>The MAC builds frames. The Reconciliation Sublayer maps them onto <b>200GMII</b>, a logical interface of 64-bit data plus control per transfer. It is usually internal to the chip, so you rarely probe it directly.</p>',
+      watch: 'Nothing here is per-lane. Lanes do not exist yet.' },
+    { n: 2, side: 'TX', title: '64B/66B encode, then 256B/257B transcode', span: [4, 15.5],
+      body: '<p>Every 8 bytes from 200GMII become one <b>66-bit block</b> (2-bit sync header plus 64-bit payload). The PCS then <b>transcodes</b> each group of four 66-bit blocks into one <b>257-bit block</b>: the four sync headers collapse into a 1-bit header plus a little control information, which frees room for FEC parity.</p><p>Transcoding is a lossless re-packing of the same data. It is not a second, independent line code; RX reverses it exactly.</p>',
+      watch: 'Four thin 66b slabs in, one wide 257b slab out.' },
+    { n: 3, side: 'TX', title: 'Scramble, AM insertion, RS-FEC, distribution', span: [15, 33.5],
+      body: '<p>Standard order on transmit: <b>scramble</b> the 257-bit blocks, then <b>insert alignment markers</b> (one per PCS lane, added as a group, so they are not scrambled), then <b>pre-FEC distribution</b> into two streams, <b>RS(544,514) encode</b> each into codewords A and B, and finally <b>symbol distribution</b> deals 10-bit symbols round-robin onto the 8 PCS lanes.</p><p>Because AMs go in before the encoder, they are FEC-protected. Because they go in after the scrambler, the receiver can spot them in raw lane data.</p>',
+      watch: 'AM blocks enter as a group, every 81,920 257-bit blocks of stream in the real 200GBASE-R PCS.' },
+    { n: 4, side: 'TX', title: 'The 8 logical PCS lanes', span: [31, 45],
+      body: '<p>Each PCS lane is a 26.5625 Gb/s stream of interleaved FEC symbols. Its identity is in the data: the <b>unique bytes of its alignment marker</b> name the lane number. Nothing about a wire or pin defines it.</p><p>The PCS-to-PMA service boundary here has 8 PMA lanes. On transmit, PMA lane <i>i</i> carries PCS lane <i>i</i>.</p>',
+      watch: 'Each colour is one PCS lane. Taller pale plates are its alignment markers, all launched together.' },
+    { n: 5, side: 'TX', title: 'PMA bit-multiplexing', span: [42, 51],
+      body: '<p>The PMA interleaves PCS lanes <b>bit by bit</b> onto fewer physical lanes. With 4 SerDes lanes, two PCS lanes share each one; with 2, four share each. Every bit of a given PCS lane follows the same physical path for as long as the mapping holds.</p><p>The PMA does not look inside the data. It does not move AMs, decode FEC, or care which lane number it carries.</p>',
+      watch: 'Cubes from different PCS lanes alternate on one SerDes track. See the bit scope below for the bit-level view.' },
+    { n: 6, side: 'Link', title: 'Physical SerDes lanes', span: [48.5, 67.5],
+      body: '<p>These are the electrical or optical lanes: AUI, backplane, cable, or the media behind a PMD. Each has its own trace length, retimer path, and CDR, so lanes arrive at different times. That difference is <b>skew</b>.</p><p>Every PCS lane on a SerDes lane sees that lane\'s skew and its noise.</p>',
+      watch: 'Add skew in the fault lab and the AM plates on one physical lane fall behind.' },
+    { n: 7, side: 'RX', title: 'RX PMA demultiplex', span: [65.5, 72],
+      body: '<p>The RX PMA recovers the clock on each SerDes lane and splits it back into PMA lanes. It has no idea which PCS lane is which, so the bit-slot phase it starts on is arbitrary. RX PMA lane 3 may carry PCS lane 2 after one reset and PCS lane 3 after the next.</p>',
+      watch: 'Lane colours leave the demux in a different order than they entered the mux.' },
+    { n: 8, side: 'RX', title: 'Alignment lock, deskew, lane reorder', span: [70.5, 85],
+      body: '<p>The RX PCS hunts each PMA lane for the common AM pattern. When AMs repeat at the expected spacing, that lane has <b>alignment lock</b>, and the unique bytes say which PCS lane it is. With all lanes locked, the PCS lines their AMs up in a <b>deskew</b> buffer and <b>reorders</b> the lanes to 0..7.</p><p><b>align_status</b> becomes true only when all 8 lanes are locked and deskewed. This has to happen before FEC decode, because each codeword is spread across all 8 PCS lanes.</p>',
+      watch: 'Lock rings, the deskew buffer filling to absorb skew, and the crossover restoring lane order.' },
+    { n: 9, side: 'RX', title: 'RX FEC, PCS decode, 200GMII and MAC', span: [84, 117],
+      body: '<p>Receive mirrors transmit: <b>de-interleave</b> symbols into codewords A and B, <b>RS(544,514) decode</b> (up to 15 symbol errors per codeword corrected), <b>post-FEC interleave</b>, <b>AM removal</b>, <b>descramble</b>, <b>reverse transcode</b> to 66-bit blocks, and <b>64B/66B decode</b> onto 200GMII.</p><p>An uncorrectable codeword is not passed on silently. The PCS marks the affected blocks as errors, so the MAC sees damaged frames as FCS errors.</p>',
+      watch: 'The decoder box flashes when it corrects or fails a codeword. Without align_status, nothing decodes and the MAC sees Local Fault.' }
+  ];
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- scene-core.js ---- */
+/* Renderer, camera, controls, theme colours and camera moves. */
+(function (P) {
+  'use strict';
+  var T = window.THREE;
+  var G = P.g = {};
+
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  P.css = css;
+
+  P.readTheme = function () {
+    var th = {
+      paper: css('--scene-bg'), ink: css('--ink'), muted: css('--muted'), rule: css('--rule'),
+      box: css('--scene-box'), edge: css('--scene-edge'), am: css('--am'), bad: css('--bad'),
+      good: css('--good'), warn: css('--warn'), cwA: css('--cw-a'), cwB: css('--cw-b'),
+      lanes: []
+    };
+    for (var i = 0; i < P.N_PCS; i++) th.lanes.push(css('--lane-' + i));
+    G.theme = th;
+    G.col = {};
+    Object.keys(th).forEach(function (k) {
+      if (k !== 'lanes') G.col[k] = new T.Color(th[k]);
+    });
+    G.col.lanes = th.lanes.map(function (c) { return new T.Color(c); });
+    return th;
+  };
+
+  P.initScene = function (host) {
+    P.readTheme();
+    var r = G.renderer = new T.WebGLRenderer({ antialias: true, alpha: false });
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    host.appendChild(r.domElement);
+    r.domElement.setAttribute('aria-hidden', 'true');
+    G.host = host;
+    G.scene = new T.Scene();
+    G.scene.background = G.col.paper.clone();
+    G.camera = new T.PerspectiveCamera(32, 2, 0.5, 600);
+    G.scene.add(new T.HemisphereLight(0xffffff, 0x8890a0, 0.95));
+    var dl = new T.DirectionalLight(0xffffff, 0.45);
+    dl.position.set(20, 40, 30);
+    G.scene.add(dl);
+
+    var c = G.controls = new T.OrbitControls(G.camera, r.domElement);
+    c.enableDamping = true; c.dampingFactor = 0.12;
+    c.enableZoom = false;           // wheel zoom needs Ctrl/Cmd so the page still scrolls
+    c.screenSpacePanning = true;
+    c.minPolarAngle = 0.35; c.maxPolarAngle = 2.3;
+    c.minAzimuthAngle = -1.1; c.maxAzimuthAngle = 1.1;
+    c.mouseButtons = { LEFT: T.MOUSE.PAN, MIDDLE: T.MOUSE.DOLLY, RIGHT: T.MOUSE.ROTATE };
+    P.setExplore(!window.matchMedia('(pointer: coarse)').matches);
+
+    r.domElement.addEventListener('wheel', function (e) {
+      if (!(e.ctrlKey || e.metaKey)) { P.hint('Hold Ctrl (⌘ on Mac) and scroll to zoom'); return; }
+      e.preventDefault();
+      P.dolly(e.deltaY > 0 ? 1.12 : 0.89);
+    }, { passive: false });
+
+    new ResizeObserver(P.resize).observe(host);
+    P.resize();
+  };
+
+  P.setExplore = function (on) {
+    G.explore = on;
+    G.controls.enabled = on;
+    // Pinch zoom on touch screens; desktop wheel zoom goes through the Ctrl/Cmd handler.
+    G.controls.enableZoom = on && window.matchMedia('(pointer: coarse)').matches;
+    G.controls.touches = { ONE: T.TOUCH.PAN, TWO: T.TOUCH.DOLLY_ROTATE };
+    G.renderer.domElement.style.touchAction = on ? 'none' : 'pan-y';
+    P.emit && P.emit('explore');
+  };
+
+  P.dolly = function (f) {
+    var c = G.controls, cam = G.camera;
+    var off = cam.position.clone().sub(c.target);
+    var len = Math.min(Math.max(off.length() * f, 8), 260);
+    cam.position.copy(c.target).add(off.setLength(len));
+  };
+
+  P.resize = function () {
+    var w = G.host.clientWidth, h = G.host.clientHeight;
+    if (!w || !h) return;
+    G.renderer.setSize(w, h, false);
+    G.camera.aspect = w / h;
+    G.camera.updateProjectionMatrix();
+    G.w = w; G.h = h;
+  };
+
+  // Camera pose that fits [x0, x1] horizontally and the lane stack vertically.
+  P.framePose = function (x0, x1, tilt) {
+    var cam = G.camera, span = x1 - x0, cx = (x0 + x1) / 2;
+    var vf = cam.fov * Math.PI / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * cam.aspect);
+    var d = Math.max(span * 0.52 / Math.tan(hf / 2), 15 / Math.tan(vf / 2));
+    var t = tilt == null ? 1 : tilt;
+    return {
+      pos: new T.Vector3(cx + d * 0.16 * t, d * 0.22 * t, d * (1 - 0.03 * t)),
+      target: new T.Vector3(cx, -0.6, 0)
+    };
+  };
+
+  var tween = null;
+  P.flyTo = function (pose, ms) {
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var c = G.controls, cam = G.camera;
+    if (reduce || ms === 0) { cam.position.copy(pose.pos); c.target.copy(pose.target); return; }
+    tween = { t0: performance.now(), ms: ms || 700,
+              p0: cam.position.clone(), q0: c.target.clone(), p1: pose.pos, q1: pose.target };
+  };
+  P.panTo = function (cx) {
+    var c = G.controls, dx = cx - c.target.x;
+    tween = null;
+    c.target.x += dx; G.camera.position.x += dx;
+  };
+
+  P.updateCamera = function (now) {
+    if (tween) {
+      var k = Math.min((now - tween.t0) / tween.ms, 1), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      G.camera.position.lerpVectors(tween.p0, tween.p1, e);
+      G.controls.target.lerpVectors(tween.q0, tween.q1, e);
+      if (k >= 1) tween = null;
+    }
+    G.controls.update();
+  };
+
+  var hintTimer = 0;
+  P.hint = function (msg) {
+    var el = document.getElementById('lab-hint');
+    if (!el) return;
+    el.textContent = msg; el.hidden = false;
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(function () { el.hidden = true; }, 1600);
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- scene-static.js ---- */
+/* Static scene: stage boxes, lane tracks, SerDes cables, lock rings, deskew bars. */
+(function (P) {
+  'use strict';
+  var T = window.THREE, G = P.g;
+  var LANE_H = 8 * P.LANE_SP + 0.8, AGG_H = 2.6, DEPTH = 2.6;
+
+  function disposeGroup(g) {
+    g.traverse(function (o) {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) o.material.dispose();
+    });
+    G.scene.remove(g);
+  }
+
+  P.buildBoxes = function () {
+    if (G.boxGroup) disposeGroup(G.boxGroup);
+    var grp = G.boxGroup = new T.Group();
+    G.boxes = [];
+    P.BOXES.forEach(function (b) {
+      var w = b.x[1] - b.x[0], h = b.lane ? LANE_H : AGG_H;
+      var geo = new T.BoxGeometry(w, h, DEPTH);
+      var mat = new T.MeshBasicMaterial({ color: G.col.box, transparent: true, opacity: b.lane ? 0.32 : 0.5, depthWrite: false });
+      var mesh = new T.Mesh(geo, mat);
+      mesh.position.set((b.x[0] + b.x[1]) / 2, 0, 0);
+      mesh.renderOrder = 2;
+      var edges = new T.LineSegments(new T.EdgesGeometry(geo),
+        new T.LineBasicMaterial({ color: G.col.edge, transparent: true, opacity: 0.9 }));
+      mesh.add(edges);
+      grp.add(mesh);
+      G.boxes.push({ def: b, mesh: mesh, edges: edges, h: h });
+    });
+    // Ground grid and the TX | link | RX dividers.
+    var gy = -LANE_H / 2 - 1.2;
+    var grid = new T.GridHelper(130, 65, G.col.rule, G.col.rule);
+    grid.position.set(58, gy, 0);
+    grid.material.transparent = true; grid.material.opacity = 0.35;
+    grid.scale.set(1, 1, 0.12);
+    grp.add(grid);
+    [P.X.muxIn - 0.5, P.X.demux[0] - 0.5].forEach(function (x) {
+      var g = new T.BufferGeometry().setFromPoints([new T.Vector3(x, gy, 0), new T.Vector3(x, LANE_H / 2 + 2.4, 0)]);
+      grp.add(new T.Line(g, new T.LineDashedMaterial({ color: G.col.muted, dashSize: 0.4, gapSize: 0.3 })));
+      grp.children[grp.children.length - 1].computeLineDistances();
+    });
+    G.scene.add(grp);
+  };
+
+  function sampleLane(link, lane, x0, x1, step) {
+    var pts = [];
+    for (var x = x0; x <= x1 + 1e-6; x += step) pts.push(new T.Vector3(x, P.yPath(link, lane, x), P.zPath(link, lane, x)));
+    return pts;
+  }
+
+  P.buildLinkScene = function () {
+    var link = P.state.link;
+    if (G.linkGroup) disposeGroup(G.linkGroup);
+    var grp = G.linkGroup = new T.Group();
+    G.tracks = []; G.rings = []; G.bars = []; G.cables = [];
+    var X = P.X;
+
+    link.lanes.forEach(function (lane) {
+      var pts = sampleLane(link, lane, X.lanesStart, X.lanesEnd, 0.25);
+      var line = new T.Line(new T.BufferGeometry().setFromPoints(pts),
+        new T.LineBasicMaterial({ color: G.col.lanes[lane.pcs], transparent: true, opacity: 0.5 }));
+      grp.add(line);
+      var tube = new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts), 360, 0.09, 6, false),
+        new T.MeshBasicMaterial({ color: G.col.lanes[lane.pcs], transparent: true, opacity: 0.85 }));
+      tube.visible = false;
+      grp.add(tube);
+      G.tracks[lane.pcs] = { line: line, tube: tube };
+
+      // Lock ring around the lane at the alignment-lock point.
+      var ring = new T.Mesh(new T.TorusGeometry(0.42, 0.07, 8, 28),
+        new T.MeshBasicMaterial({ color: G.col.good }));
+      ring.rotation.y = Math.PI / 2;
+      ring.position.set(X.amLock, P.yPcs(lane.rxPma), 0);
+      grp.add(ring);
+      G.rings[lane.pcs] = ring;
+
+      // Deskew fill: how much this lane is held back to line up with the slowest.
+      var D = 0;
+      link.lanes.forEach(function (l) { if (!l.deskewFail) D = Math.max(D, l.relSkewNs); });
+      var hold = lane.deskewFail ? 1 : (D - lane.relSkewNs) / P.DESKEW_CAP_NS;
+      var bw = Math.max(0.05, Math.min(hold, 1)) * (X.deskew[1] - X.deskew[0] - 0.4);
+      var bar = new T.Mesh(new T.BoxGeometry(bw, 0.22, 0.5),
+        new T.MeshBasicMaterial({ color: lane.deskewFail ? G.col.bad : G.col.lanes[lane.pcs], transparent: true, opacity: 0.45 }));
+      bar.position.set(X.deskew[0] + 0.2 + bw / 2, P.yPcs(lane.rxPma) - 0.42, 0.9);
+      grp.add(bar);
+      G.bars[lane.pcs] = bar;
+    });
+
+    // Physical SerDes lanes: a neutral sheath around the PCS lanes they carry.
+    for (var s = 0; s < link.width; s++) {
+      var pts = [];
+      for (var x = X.mux[1] - 0.5; x <= X.demux[0] + 0.5; x += 0.25) pts.push(new T.Vector3(x, P.cableY(link, s, x), 0));
+      var r = link.width === 8 ? 0.36 : link.width === 4 ? 0.5 : 0.62;
+      var cable = new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts), 160, r, 14, false),
+        new T.MeshBasicMaterial({ color: G.col.ink, transparent: true, opacity: 0.08, depthWrite: false }));
+      grp.add(cable);
+      G.cables[s] = cable;
+    }
+    G.scene.add(grp);
+    P.styleLinkScene();
+  };
+
+  var LOCK_COL = { locked: 'good', checking: 'warn', searching: 'warn', nolock: 'bad' };
+  P.styleLinkScene = function () {
+    var S = P.state, sel = S.selected;
+    if (!G.tracks) return;
+    S.link.lanes.forEach(function (lane) {
+      var t = G.tracks[lane.pcs], on = sel < 0 || sel === lane.pcs;
+      t.line.material.opacity = on ? 0.55 : 0.12;
+      t.tube.visible = sel === lane.pcs;
+      G.rings[lane.pcs].material.color.copy(G.col[LOCK_COL[P.lockView(S.lock[lane.pcs])]]);
+      G.rings[lane.pcs].scale.setScalar(on ? 1 : 0.7);
+      G.bars[lane.pcs].material.opacity = on ? 0.5 : 0.12;
+    });
+    G.cables.forEach(function (c, s) {
+      var carries = sel < 0 || S.link.lanes[sel].serdes === s;
+      var noisy = S.faults.noise > 0 && (S.faults.noiseLane < 0 || S.faults.noiseLane === s);
+      var dead = S.faults.los && S.faults.losLane === s;
+      c.material.color.copy(dead ? G.col.bad : noisy ? G.col.warn : G.col.ink);
+      c.material.opacity = (carries ? 0.12 : 0.04) + (dead || noisy ? 0.08 : 0);
+    });
+  };
+
+  P.recolorStatic = function () {
+    G.scene.background.copy(G.col.paper);
+    if (G.boxes) G.boxes.forEach(function (b) {
+      b.mesh.material.color.copy(G.col.box);
+      b.edges.material.color.copy(G.col.edge);
+    });
+    P.buildBoxes();
+    P.buildLinkScene();
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- packets.js ---- */
+/* Moving data: one InstancedMesh for every cube in the scene, rebuilt each frame. */
+(function (P) {
+  'use strict';
+  var T = window.THREE, G = P.g;
+  var MAX = 1400;
+  var m4 = new T.Matrix4(), q = new T.Quaternion(), v = new T.Vector3(), sc = new T.Vector3();
+  var c = new T.Color(), tmp = new T.Color();
+  var count = 0;
+
+  P.initPackets = function () {
+    var geo = new T.BoxGeometry(1, 1, 1);
+    var mat = new T.MeshLambertMaterial({ color: 0xffffff });
+    G.inst = new T.InstancedMesh(geo, mat, MAX);
+    G.inst.instanceMatrix.setUsage(T.DynamicDrawUsage);
+    G.inst.setColorAt(0, new T.Color());
+    G.inst.frustumCulled = false;
+    G.scene.add(G.inst);
+  };
+
+  function put(x, y, z, sx, sy, sz, col) {
+    if (count >= MAX) return;
+    v.set(x, y, z); sc.set(sx, sy, sz);
+    m4.compose(v, q, sc);
+    G.inst.setMatrixAt(count, m4);
+    G.inst.setColorAt(count, col);
+    count++;
+  }
+
+  function dim(col, on, amt) {
+    if (!on) col.lerp(G.col.paper, amt == null ? 0.82 : amt);
+    return col;
+  }
+
+  // PCS-lane data units from symbol distribution to lane reorder.
+  function drawLanes() {
+    var S = P.state, link = S.link, X = P.X, f = S.faults;
+    var extra = P.noiseToSer(f.noise);
+    var pVis = extra > 0 ? Math.min(0.5, 0.04 + 0.08 * Math.log10(1 + extra * 1e6)) : 0;
+    link.lanes.forEach(function (lane) {
+      var p = lane.pcs, segs = S.segs[p], on = S.selected < 0 || S.selected === p;
+      var nHi = Math.floor((X.lanesStart + S.u - P.unwarp(X.lanesStart, segs)) / P.GAP);
+      var nLo = Math.ceil((X.lanesStart + S.u - P.unwarp(X.lanesEnd, segs)) / P.GAP);
+      var noisy = f.noise > 0 && (f.noiseLane < 0 || f.noiseLane === lane.serdes);
+      var dead = f.los && f.losLane === lane.serdes;
+      var amBad = f.amLoss && f.amLane === p;
+      for (var n = Math.max(nLo, 0); n <= nHi; n++) {
+        var u = X.lanesStart + S.u - n * P.GAP;
+        var x = P.warp(u, segs);
+        if (x < X.lanesStart || x > X.lanesEnd) continue;
+        var dx = P.warp(u + 0.05, segs) - x;            // local compression from mux/skew/deskew
+        var comp = Math.min(Math.max(dx / 0.05, 0.12), 1);
+        var y = P.yPath(link, lane, x), z = P.zPath(link, lane, x);
+        var isAm = n % P.AM_PERIOD === 0;
+        c.copy(G.col.lanes[p]);
+        var len = 0.62 * comp, h = 0.42, d = 0.42;
+        if (isAm) { c.lerp(G.col.paper, 0.45); len = Math.max(0.18, 0.26 * comp); h = 1.05; d = 0.9; }
+        if (dead && x > X.noiseAt && x < X.amLock + 0.5) {
+          c.copy(G.col.muted); y += (P.hash(n, p) - 0.5) * 0.5; h *= 0.6;
+        } else if (amBad && isAm && x > X.mux[0]) {
+          c.copy(G.col.bad); h = 0.75;
+        } else if (noisy && !isAm && x > X.noiseAt && x < X.lanesEnd && P.hash(n, p * 7 + 3) < pVis) {
+          c.copy(G.col.bad); h = 0.55; d = 0.55;
+        }
+        if (!S.align && x > X.deskew[1]) c.lerp(G.col.paper, 0.6);
+        put(x, y, z, len, h, d, dim(c, on));
+      }
+    });
+  }
+
+  // Aggregate (single-stream) segments before distribution and after reorder.
+  var SEGS = [
+    { x: [0, 7.5], kind: 'mii', side: 'tx' },
+    { x: [7.5, 12.5], kind: 'b66', side: 'tx' },
+    { x: [12.5, 20.5], kind: 'b257', side: 'tx' },
+    { x: [20.5, 25.5], kind: 'b257', side: 'tx', scr: true, am: 'in' },
+    { x: [25.5, 31], kind: 'row', side: 'tx', scr: true },
+    { x: [84.5, 89], kind: 'row', side: 'rx', scr: true },
+    { x: [89, 95.5], kind: 'b257', side: 'rx', scr: true, am: 'out' },
+    { x: [95.5, 104], kind: 'b257', side: 'rx' },
+    { x: [104, 109], kind: 'b66', side: 'rx' },
+    { x: [109, 116], kind: 'mii', side: 'rx' }
+  ];
+  var GAPS = { mii: 0.75, b66: 0.75, b257: 3.0, row: 1.25 };
+  var SIZE = { mii: [0.42, 0.42, 0.42], b66: [0.62, 0.62, 1.1], b257: [2.4, 0.95, 1.2], row: [1.0, 0.36, 0.7] };
+
+  function drawAggregate() {
+    var S = P.state, last = S.lastTick, uncFrac = last && last.codewords ? last.uncorrectable / last.codewords : 0;
+    SEGS.forEach(function (sg) {
+      var gap = GAPS[sg.kind], sz = SIZE[sg.kind];
+      var rows = sg.kind === 'row' ? [0, 1] : [null];
+      rows.forEach(function (row) {
+        var off = row === 1 ? gap / 2 : 0;
+        var hi = Math.floor((S.u - sg.x[0] - off) / gap), lo = Math.ceil((S.u - sg.x[1] - off) / gap);
+        for (var n = lo; n <= hi; n++) {
+          var pos = S.u - off - n * gap;               // every cube moves at the same speed
+          if (pos < sg.x[0] || pos > sg.x[1]) continue;
+          var y = row === null ? 0 : (row === 0 ? 0.42 : -0.42), sx = sz[0], sy = sz[1], sz2 = sz[2];
+          var col = c;
+          if (sg.kind === 'mii') col.copy(G.col.muted);
+          else if (sg.kind === 'row') col.copy(row === 0 ? G.col.cwA : G.col.cwB);
+          else col.copy(sg.scr ? G.col.edge : G.col.ink);
+          if (sg.kind === 'row' && ((n % 18) + 18) % 18 >= 16 && sg.side === 'tx' && pos > 28.75) col.lerp(G.col.ink, 0.5);
+          var isAm = (sg.am === 'in' && ((n % 5) + 5) % 5 === 0 && pos > 21.5) || (sg.am === 'out' && ((n % 5) + 5) % 5 === 0 && pos < 95.5);
+          if (isAm) { col.copy(G.col.am); sy = 1.6; sx = 1.0; }
+          if (sg.side === 'rx' && !S.align) {
+            if (sg.kind !== 'mii') continue;
+            col.copy(G.col.bad); sy *= 0.7;
+          } else if (sg.side === 'rx' && uncFrac > 0 && !isAm && pos > 91 && P.hash(n, 911) < Math.min(0.6, uncFrac * 40)) {
+            col.copy(G.col.bad);
+          } else if (sg.kind === 'mii' && sg.side === 'tx' && P.hash(n, 5) < 0.12) {
+            col.lerp(G.col.paper, 0.6);                      // idle between frames
+          }
+          put(pos, y, 0, sx, sy, sz2, dim(col, P.state.selected < 0, 0.45));
+        }
+      });
+    });
+  }
+
+  P.drawPackets = function () {
+    count = 0;
+    drawAggregate();
+    drawLanes();
+    G.inst.count = count;
+    G.inst.instanceMatrix.needsUpdate = true;
+    if (G.inst.instanceColor) G.inst.instanceColor.needsUpdate = true;
+  };
+
+  // RS decode box flashes on corrected / uncorrectable codewords.
+  var pulse = 0, pulseBad = false;
+  P.fecPulse = function (d) {
+    if (!d) return;
+    if (d.uncorrectable > 0) { pulse = 1; pulseBad = true; }
+    else if (d.corrected > 0) { pulse = Math.max(pulse, Math.min(1, 0.25 + Math.log10(1 + d.corrected) / 4)); pulseBad = false; }
+  };
+  P.updatePulse = function (dt) {
+    pulse *= Math.exp(-dt * 4);
+    if (!G.boxes) return;
+    G.boxes.forEach(function (b) {
+      if (!b.def.fec) return;
+      tmp.copy(G.col.box).lerp(pulseBad ? G.col.bad : G.col.good, pulse * 0.8);
+      b.mesh.material.color.copy(tmp);
+    });
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- labels.js ---- */
+/* HTML labels projected from 3D anchors. Higher-priority labels win; a label
+   that would overlap one already placed is hidden for that frame. */
+(function (P) {
+  'use strict';
+  var T = window.THREE, G = P.g;
+  var v = new T.Vector3();
+  var items = [];
+
+  P.initLabels = function (host) {
+    G.labelHost = document.createElement('div');
+    G.labelHost.className = 'scene-labels';
+    G.labelHost.setAttribute('aria-hidden', 'true');
+    host.appendChild(G.labelHost);
+  };
+
+  function setLabels(list) {
+    var keep = {};
+    list.forEach(function (d) { keep[d.id] = d; });
+    items = items.filter(function (it) {
+      if (keep[it.id]) return true;
+      it.el.remove(); return false;
+    });
+    list.forEach(function (d) {
+      var it = items.find(function (x) { return x.id === d.id; });
+      if (!it) {
+        it = { id: d.id, el: document.createElement('div') };
+        G.labelHost.appendChild(it.el);
+        items.push(it);
+      }
+      if (it.html !== d.html || it.cls !== d.cls) {
+        it.el.innerHTML = d.html; it.el.className = 'lbl ' + (d.cls || '');
+        it.html = d.html; it.cls = d.cls; it.w = 0;
+      }
+      it.pos = d.pos; it.pri = d.pri; it.anchor = d.anchor || 'c';
+    });
+    items.sort(function (a, b) { return b.pri - a.pri; });
+  }
+
+  P.buildLabels = function () {
+    var S = P.state, link = S.link, X = P.X, L = [], sel = S.selected;
+    var top = 4 * P.LANE_SP + 0.4;
+    P.BOXES.forEach(function (b, i) {
+      var y = b.lane ? top + 0.3 : 1.6;
+      L.push({ id: 'box' + i, html: b.short || b.name, cls: 'lbl-box', pos: [(b.x[0] + b.x[1]) / 2, y, 0], pri: b.lane ? 3 : 2 });
+    });
+    P.STAGES.forEach(function (st) {
+      L.push({ id: 'st' + st.n, html: '<b>' + st.n + '</b>', cls: 'lbl-stage' + (S.stage === st.n ? ' on' : ''),
+               pos: [(st.span[0] + st.span[1]) / 2, top + 2.2, 0], pri: 4 });
+    });
+    link.lanes.forEach(function (l) {
+      var p = l.pcs, on = sel < 0 || sel === p, cls = 'lbl-lane l' + p + (on ? '' : ' dim');
+      L.push({ id: 'in' + p, html: 'PCS ' + p, cls: cls, pos: [X.lanesStart - 0.4, P.yPcs(p), 0], pri: 6, anchor: 'r' });
+      L.push({ id: 'out' + p, html: 'PCS ' + p, cls: cls, pos: [X.lanesEnd + 0.2, P.yPcs(p), 0], pri: 5, anchor: 'l' });
+    });
+    for (var s = 0; s < link.width; s++) {
+      var carried = P.lanesOnSerdes(link, s).map(function (l) { return l.pcs; });
+      var on = sel < 0 || carried.indexOf(sel) >= 0;
+      L.push({ id: 'sd' + s, html: 'SerDes ' + s + ' <span>' + carried.join(' · ') + '</span>',
+               cls: 'lbl-serdes' + (on ? '' : ' dim'),
+               pos: [52, P.ySerdes(s, link.width) + (link.width === 8 ? 0.55 : 0.75), 0], pri: 4 });
+    }
+    L.push({ id: 'align', html: 'align_status ' + (S.align ? 'true' : 'false'),
+             cls: 'lbl-status ' + (S.align ? 'ok' : 'bad'), pos: [X.reorder[1] - 1, -top - 0.9, 0], pri: 7 });
+    L.push({ id: 'cap', html: 'deskew buffer', cls: 'lbl-note', pos: [(X.deskew[0] + X.deskew[1]) / 2, -top - 0.9, 0], pri: 2 });
+    [['TRANSMIT', 16], ['CHANNEL', 57], ['RECEIVE', 100]].forEach(function (z, i) {
+      L.push({ id: 'zone' + i, html: z[0] + (i === 1 ? '' : ' →'), cls: 'lbl-zone', pos: [z[1], -top - 2.4, 0], pri: 3 });
+    });
+    if (sel >= 0) {
+      var l = link.lanes[sel], k = link.k;
+      var callouts = [
+        [X.lanesStart + 4, P.yPcs(sel), 'PCS lane ' + sel + ' · TX PMA lane ' + l.txPma],
+        [60, P.cableY(link, l.serdes, 60), 'SerDes ' + l.serdes + (k > 1 ? ', bit slot ' + (l.slot + 1) + ' of ' + k : '') +
+          (l.rxSerdes !== l.serdes ? ' → arrives as RX SerDes ' + l.rxSerdes : '')],
+        [X.demux[1] + 1.4, P.yPcs(l.rxPma), 'RX PMA lane ' + l.rxPma],
+        [X.reorder[1], P.yPcs(sel), 'reordered → PCS ' + sel]
+      ];
+      callouts.forEach(function (cx, i) {
+        L.push({ id: 'co' + i, html: cx[2], cls: 'lbl-callout l' + sel, pos: [cx[0], cx[1] - 0.7, 1.2], pri: 8 });
+      });
+    }
+    setLabels(L);
+  };
+
+  P.updateLabels = function () {
+    var cam = G.camera, W = G.w, H = G.h, placed = [];
+    items.forEach(function (it) {
+      v.set(it.pos[0], it.pos[1], it.pos[2]).project(cam);
+      var show = v.z < 1 && v.x > -1.1 && v.x < 1.1 && v.y > -1.1 && v.y < 1.1;
+      if (show) {
+        if (!it.w) { it.w = it.el.offsetWidth || 40; it.h = it.el.offsetHeight || 16; }
+        var sx = (v.x + 1) / 2 * W, sy = (1 - v.y) / 2 * H;
+        var x0 = it.anchor === 'r' ? sx - it.w : it.anchor === 'l' ? sx : sx - it.w / 2;
+        var r = { x0: x0 - 2, y0: sy - it.h / 2 - 1, x1: x0 + it.w + 2, y1: sy + it.h / 2 + 1 };
+        show = r.x0 > -4 && r.x1 < W + 4 && !placed.some(function (q) {
+          return r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0;
+        });
+        if (show) {
+          placed.push(r);
+          var t = 'translate(' + Math.round(x0) + 'px,' + Math.round(sy - it.h / 2) + 'px)';
+          if (t !== it.t) { it.el.style.transform = t; it.t = t; }
+        }
+      }
+      if (show !== it.shown) { it.el.style.visibility = show ? 'visible' : 'hidden'; it.shown = show; }
+    });
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- ui-controls.js ---- */
+/* Toolbar, lane chips, stage rail, stage detail and keyboard shortcuts. */
+(function (P) {
+  'use strict';
+  var S = P.state, $ = function (id) { return document.getElementById(id); };
+
+  P.setWidth = function (w) { S.width = w; P.rebuild(true); };
+  P.setPreset = function (p) { S.preset = p; P.rebuild(true); };
+
+  P.selectLane = function (p) {
+    S.selected = S.selected === p ? -1 : p;
+    P.emit('select');
+  };
+
+  P.setPlaying = function (on) {
+    S.playing = on;
+    var b = $('btn-play');
+    b.textContent = on ? 'Pause' : 'Resume';
+    b.setAttribute('aria-pressed', String(on));
+    P.emit('play');
+  };
+
+  P.step = function () {
+    if (S.playing) P.setPlaying(false);
+    S.stepTo = (S.stepTo != null ? S.stepTo : S.u) + P.GAP;
+    P.fecPulse(P.tick());
+  };
+
+  function syncToolbar() {
+    document.querySelectorAll('[data-width]').forEach(function (b) {
+      b.setAttribute('aria-checked', String(+b.dataset.width === S.width));
+      b.tabIndex = +b.dataset.width === S.width ? 0 : -1;
+    });
+    document.querySelectorAll('[data-preset]').forEach(function (b) {
+      b.setAttribute('aria-checked', String(b.dataset.preset === S.preset));
+      b.tabIndex = b.dataset.preset === S.preset ? 0 : -1;
+    });
+    document.querySelectorAll('.chip[data-lane]').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(+b.dataset.lane === S.selected));
+    });
+    var w = P.WIDTHS[S.width], k = P.N_PCS / S.width;
+    $('lab-summary').textContent = S.width + ' SerDes lanes × ' + w.gbps + ' Gb/s ' + w.mod +
+      ' (' + w.baud + ' GBd) · ' + (k === 1 ? 'one PCS lane per SerDes lane' : k + ' PCS lanes bit-multiplexed per SerDes lane') +
+      ' · align_status ' + (S.align ? 'true' : 'false');
+  }
+  P.syncToolbar = syncToolbar;
+
+  // Arrow keys move between radio buttons in a segmented control.
+  function radioKeys(group, attr, apply) {
+    group.addEventListener('keydown', function (e) {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].indexOf(e.key) < 0) return;
+      var btns = Array.prototype.slice.call(group.querySelectorAll('[' + attr + ']'));
+      var i = btns.indexOf(document.activeElement);
+      if (i < 0) return;
+      e.preventDefault();
+      var j = (i + (e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1) + btns.length) % btns.length;
+      btns[j].focus(); apply(btns[j]);
+    });
+  }
+
+  P.goStage = function (n, fly) {
+    var st = P.STAGES[n - 1];
+    S.stage = n;
+    var d = $('stage-detail');
+    d.innerHTML = '<div class="sd-head"><span class="sd-num">' + st.n + '</span><span class="sd-side ' + st.side.toLowerCase() + '">' +
+      st.side + '</span><h3>' + st.title + '</h3></div><div class="sd-body">' + st.body +
+      '<p class="sd-watch"><b>In the scene:</b> ' + st.watch + '</p></div><div class="sd-nav">' +
+      '<button type="button" class="btn" id="sd-prev"' + (n === 1 ? ' disabled' : '') + '>← Previous stage</button>' +
+      '<button type="button" class="btn" id="sd-next"' + (n === 9 ? ' disabled' : '') + '>Next stage →</button></div>';
+    $('sd-prev').onclick = function () { P.goStage(n - 1, true); };
+    $('sd-next').onclick = function () { P.goStage(n + 1, true); };
+    document.querySelectorAll('.rail button').forEach(function (b) {
+      b.setAttribute('aria-current', +b.dataset.stage === n ? 'step' : 'false');
+    });
+    var btn = document.querySelector('.rail button[data-stage="' + n + '"]');
+    if (btn) { railLock = performance.now(); btn.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' }); }
+    if (fly !== false) P.flyTo(P.framePose(st.span[0], st.span[1], 1.2));
+    P.emit('stage');
+  };
+
+  var railLock = 0;
+  function buildRail() {
+    var rail = $('rail');
+    rail.innerHTML = P.STAGES.map(function (st) {
+      return '<button type="button" data-stage="' + st.n + '"><span class="rn">' + st.n + '</span><span class="rs ' +
+        st.side.toLowerCase() + '">' + st.side + '</span><span class="rt">' + st.title + '</span></button>';
+    }).join('');
+    rail.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-stage]');
+      if (b) P.goStage(+b.dataset.stage);
+    });
+    // On narrow screens the rail scrolls sideways; scrolling it pans along the link.
+    rail.addEventListener('scroll', function () {
+      if (performance.now() - railLock < 900) return;
+      var max = rail.scrollWidth - rail.clientWidth;
+      if (max <= 0) return;
+      P.panTo(4 + (rail.scrollLeft / max) * 108);
+    }, { passive: true });
+  }
+
+  P.initControls = function () {
+    buildRail();
+    $('btn-play').onclick = function () { P.setPlaying(!S.playing); };
+    $('btn-step').onclick = P.step;
+    $('sel-speed').onchange = function (e) { S.speed = +e.target.value; };
+    document.querySelectorAll('[data-width]').forEach(function (b) { b.onclick = function () { P.setWidth(+b.dataset.width); }; });
+    document.querySelectorAll('[data-preset]').forEach(function (b) { b.onclick = function () { P.setPreset(b.dataset.preset); }; });
+    radioKeys(document.querySelector('[aria-labelledby="w-label"]'), 'data-width', function (b) { P.setWidth(+b.dataset.width); });
+    radioKeys(document.querySelector('[aria-labelledby="m-label"]'), 'data-preset', function (b) { P.setPreset(b.dataset.preset); });
+    document.querySelectorAll('.chip[data-lane]').forEach(function (b) {
+      b.onclick = function () { var p = +b.dataset.lane; if (p < 0) { S.selected = -1; P.emit('select'); } else P.selectLane(p); };
+    });
+    $('btn-overview').onclick = function () { S.stage = null; P.emit('stage'); P.flyTo(P.framePose(-2, 118, 0.6)); };
+    $('btn-explore').onclick = function () { P.setExplore(!P.g.explore); };
+    P.on(function (what) {
+      if (what === 'explore') {
+        $('btn-explore').setAttribute('aria-pressed', String(P.g.explore));
+        $('vp-help').textContent = P.g.explore
+          ? (matchMedia('(pointer: coarse)').matches ? 'Drag to pan · pinch to zoom and rotate' : 'Drag to pan · right-drag to rotate · Ctrl + scroll to zoom')
+          : 'Camera locked so the page scrolls · use the stage rail, or turn on Drag to explore';
+      }
+    });
+
+    var vp = $('viewport');
+    vp.tabIndex = 0;
+    vp.setAttribute('aria-label', '3D lane diagram. Arrow keys pan, plus and minus zoom.');
+    vp.addEventListener('keydown', function (e) {
+      var c = P.g.controls, cam = P.g.camera;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        var dx = e.key === 'ArrowLeft' ? -3 : 3; c.target.x += dx; cam.position.x += dx; e.preventDefault();
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        var dy = e.key === 'ArrowUp' ? 1 : -1; c.target.y += dy; cam.position.y += dy; e.preventDefault();
+      } else if (e.key === '+' || e.key === '=') { P.dolly(0.85); e.preventDefault(); }
+      else if (e.key === '-' || e.key === '_') { P.dolly(1.18); e.preventDefault(); }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      var t = e.target;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.key === 'p' || e.key === 'P') { P.setPlaying(!S.playing); }
+      else if (e.key === '.') { P.step(); }
+      else if (/^[0-7]$/.test(e.key)) { P.selectLane(+e.key); }
+      else if (e.key === 'Escape' && S.selected >= 0) { S.selected = -1; P.emit('select'); }
+      else return;
+      e.preventDefault();
+    });
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- ui-map.js ---- */
+/* Mapping table, RX order strip and bit scope. */
+(function (P) {
+  'use strict';
+  var S = P.state, $ = function (id) { return document.getElementById(id); };
+  var LOCK_TXT = { locked: 'locked', checking: 'checking', searching: 'searching', nolock: 'no lock' };
+
+  P.renderMapping = function () {
+    var link = S.link, sel = S.selected;
+    function cell(p, label) {
+      return '<button type="button" class="oc l' + p + (sel >= 0 && sel !== p ? ' dim' : '') + (sel === p ? ' on' : '') +
+        '" data-lane="' + p + '" aria-label="PCS lane ' + p + '">' + label + '</button>';
+    }
+    var arrive = link.byRxPma.map(function (p) { return cell(p, p); }).join('');
+    var after = [0, 1, 2, 3, 4, 5, 6, 7].map(function (p) {
+      var L = S.lock[p], ok = S.align;
+      return cell(p, ok ? p : (L.state === 'locked' ? p : '?'));
+    }).join('');
+    $('order-strip').innerHTML =
+      '<div class="orow"><span>RX PMA lanes 0–7 carry PCS</span><div>' + arrive + '</div></div>' +
+      '<div class="orow"><span>After AM lock + reorder</span><div>' + after + '</div></div>';
+
+    var rows = link.lanes.map(function (l) {
+      var lv = P.lockView(S.lock[l.pcs]);
+      return '<tr class="' + (sel === l.pcs ? 'on' : '') + (sel >= 0 && sel !== l.pcs ? ' dim' : '') + '" data-lane="' + l.pcs + '">' +
+        '<th scope="row"><span class="sw l' + l.pcs + '"></span>' + l.pcs + '</th>' +
+        '<td>' + l.txPma + '</td>' +
+        '<td>' + l.serdes + (link.k > 1 ? '<small>·' + (l.slot + 1) + '/' + link.k + '</small>' : '') + '</td>' +
+        '<td>' + l.rxPma + '</td>' +
+        '<td class="num">' + Math.round(l.relSkewNs) + '</td>' +
+        '<td><span class="pill ' + lv + '">' + LOCK_TXT[lv] + '</span></td></tr>';
+    }).join('');
+    $('map-table').innerHTML = '<caption class="sr">PCS lane to SerDes lane mapping</caption>' +
+      '<thead><tr><th scope="col">PCS</th><th scope="col">TX PMA</th><th scope="col">SerDes · slot</th>' +
+      '<th scope="col">RX PMA</th><th scope="col">Skew ns</th><th scope="col">AM lock</th></tr></thead><tbody>' + rows + '</tbody>';
+    var k = link.k;
+    $('map-note').textContent = (k === 1
+      ? 'One PCS lane per SerDes lane. '
+      : k + ' PCS lanes share each SerDes lane, one bit slot each. ') +
+      'The assignment is fixed while the link is up. A re-lock or a different mux setting can change which RX PMA lane carries which PCS lane; the alignment markers sort it out.';
+  };
+
+  // Bit scope: each row is one TX SerDes lane, newest bits on the right.
+  var cv, ctx, dpr = 1, cols = 40;
+  P.initScope = function () {
+    cv = $('scope'); ctx = cv.getContext('2d');
+    new ResizeObserver(sizeScope).observe(cv.parentElement);
+    cv.parentElement.addEventListener('click', function (e) {
+      var r = cv.getBoundingClientRect(), row = Math.floor((e.clientY - r.top - 22) / rowH());
+      var lanes = row >= 0 && row < S.width ? P.lanesOnSerdes(S.link, row) : [];
+      if (lanes.length) P.selectLane(lanes[0].pcs === S.selected && lanes[1] ? lanes[1].pcs : lanes[0].pcs);
+    });
+  };
+  function rowH() { return S.width === 8 ? 22 : 34; }
+  function sizeScope() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = cv.parentElement.clientWidth, h = 26 + S.width * rowH();
+    cv.style.height = h + 'px';
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    cols = Math.max(16, Math.min(48, Math.floor((w - 64) / 15)));
+    P.drawScope();
+  }
+  P.sizeScope = sizeScope;
+
+  P.drawScope = function () {
+    if (!ctx || !S.link) return;
+    var W = cv.width / dpr, link = S.link, k = link.k, f = S.faults, g = P.g.theme, sel = S.selected;
+    var pam = S.width < 8, x0 = 60, cw = (W - x0 - 6) / cols, rh = rowH();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, cv.height / dpr);
+    ctx.font = '500 11px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.fillStyle = g.muted; ctx.textBaseline = 'middle';
+    ctx.fillText('older bits', x0, 10);
+    ctx.textAlign = 'right'; ctx.fillText('newer bits →', W - 6, 10); ctx.textAlign = 'left';
+    var tb = S.u / P.GAP * k, base = Math.floor(tb), frac = tb - base;
+    var noiseP = f.noise > 0 ? Math.min(0.5, 0.04 + 0.08 * Math.log10(1 + P.noiseToSer(f.noise) * 1e6)) : 0;
+    for (var s = 0; s < S.width; s++) {
+      var y = 22 + s * rh, lanes = P.lanesOnSerdes(link, s);
+      var dead = f.los && f.losLane === s, noisy = f.noise > 0 && (f.noiseLane < 0 || f.noiseLane === s);
+      ctx.fillStyle = g.ink; ctx.font = '600 11px "IBM Plex Mono", ui-monospace, monospace';
+      ctx.fillText('SD ' + s, 4, y + rh / 2 - (pam ? 5 : 0));
+      if (pam) { ctx.fillStyle = g.muted; ctx.font = '500 10px "IBM Plex Mono", ui-monospace, monospace'; ctx.fillText('PAM4', 4, y + rh / 2 + 8); }
+      for (var c = 0; c <= cols; c++) {
+        var b = base - (cols - c);
+        var slot = ((b % k) + k) % k, p = lanes[slot].pcs, n = Math.floor(b / k);
+        var x = x0 + (c - frac) * cw;
+        if (x < x0 - 0.5) continue;
+        var isAm = ((n % P.AM_PERIOD) + P.AM_PERIOD) % P.AM_PERIOD === 0;
+        var col = dead ? g.muted : g.lanes[p];
+        ctx.globalAlpha = sel >= 0 && sel !== p ? 0.18 : 1;
+        ctx.fillStyle = col;
+        var top = y + 3, hgt = rh - (pam ? 14 : 8);
+        ctx.fillRect(x + 1, top, cw - 2, hgt);
+        if (isAm && !dead) { ctx.fillStyle = g.paper; ctx.globalAlpha *= 0.55; ctx.fillRect(x + 1, top, cw - 2, hgt / 2); ctx.globalAlpha = sel >= 0 && sel !== p ? 0.18 : 1; }
+        if (!dead && noisy && !isAm && P.hash(n, p * 7 + 3) < noiseP) {
+          ctx.strokeStyle = g.bad; ctx.lineWidth = 2; ctx.strokeRect(x + 1.5, top + 0.5, cw - 3, hgt - 1);
+        }
+        if (cw > 11) {
+          ctx.fillStyle = g.paper; ctx.font = '600 9px "IBM Plex Mono", ui-monospace, monospace'; ctx.textAlign = 'center';
+          ctx.fillText(dead ? '·' : String(P.hash(b, 17) < 0.5 ? 0 : 1), x + cw / 2, top + hgt / 2 + 0.5);
+          ctx.textAlign = 'left';
+        }
+        // PAM4 symbol bracket: two consecutive bits form one symbol.
+        if (pam && ((b % 2) + 2) % 2 === 0) {
+          ctx.globalAlpha = 0.6; ctx.strokeStyle = g.muted; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(x + 2, y + rh - 8); ctx.lineTo(x + 2, y + rh - 5); ctx.lineTo(x + 2 * cw - 2, y + rh - 5); ctx.lineTo(x + 2 * cw - 2, y + rh - 8); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+  };
+
+  P.scopeNote = function () {
+    var k = S.link.k, w = P.WIDTHS[S.width];
+    $('scope-note').textContent = k === 1
+      ? 'Each SerDes lane carries one PCS lane, so every bit on a row has the same colour. Pale cells are alignment-marker bits.'
+      : 'Bits from ' + k + ' PCS lanes alternate on each SerDes lane, so a row cycles through ' + k + ' colours. Brackets mark ' + w.mod +
+        ' symbols of 2 bits: adjacent bits, so one symbol carries bits from two PCS lanes. Pale cells are alignment-marker bits; red outlines are bit errors. Click a row to follow its lanes.';
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- ui-faults.js ---- */
+/* Fault lab controls. */
+(function (P) {
+  'use strict';
+  var S = P.state, F = S.faults, $ = function (id) { return document.getElementById(id); };
+
+  function opts(n, sel, prefix, extra) {
+    var h = extra || '';
+    for (var i = 0; i < n; i++) h += '<option value="' + i + '"' + (i === sel ? ' selected' : '') + '>' + prefix + ' ' + i + '</option>';
+    return h;
+  }
+
+  P.renderFaults = function () {
+    var w = S.width;
+    $('faults').innerHTML =
+      '<fieldset class="fault"><legend>Lane skew</legend>' +
+        '<div class="frow"><label for="f-skew-lane">Delay</label><select id="f-skew-lane">' + opts(w, F.skewLane, 'SerDes') + '</select>' +
+        '<output id="f-skew-out" for="f-skew">' + F.skewNs + ' ns</output></div>' +
+        '<div class="rangewrap"><input type="range" id="f-skew" min="0" max="250" step="5" value="' + F.skewNs + '" aria-describedby="f-skew-help">' +
+        '<span class="cap" style="left:' + (P.DESKEW_CAP_NS / 250 * 100) + '%" aria-hidden="true">180 ns budget</span></div>' +
+        '<p class="fhelp" id="f-skew-help">All PCS lanes on that SerDes lane arrive late together. Deskew absorbs it up to the budget.</p>' +
+      '</fieldset>' +
+      '<fieldset class="fault"><legend>Alignment marker loss</legend>' +
+        '<div class="frow"><label class="check"><input type="checkbox" id="f-am"' + (F.amLoss ? ' checked' : '') + '> Corrupt AMs on</label>' +
+        '<select id="f-am-lane" aria-label="PCS lane with corrupted AMs">' + opts(8, F.amLane, 'PCS') + '</select></div>' +
+        '<p class="fhelp">After ' + P.AM_LOSS_COUNT + ' bad AMs in a row (illustrative count) that lane drops lock, and align_status with it.</p>' +
+      '</fieldset>' +
+      '<fieldset class="fault"><legend>Loss of signal</legend>' +
+        '<div class="frow"><label class="check"><input type="checkbox" id="f-los"' + (F.los ? ' checked' : '') + '> Kill</label>' +
+        '<select id="f-los-lane" aria-label="SerDes lane to kill">' + opts(w, F.losLane, 'SerDes') + '</select></div>' +
+        '<p class="fhelp">Every PCS lane carried by that SerDes lane loses lock at once.</p>' +
+      '</fieldset>' +
+      '<fieldset class="fault"><legend>Channel noise</legend>' +
+        '<div class="frow"><label for="f-noise-lane">On</label><select id="f-noise-lane">' + opts(w, F.noiseLane, 'SerDes', '<option value="-1"' + (F.noiseLane < 0 ? ' selected' : '') + '>all lanes</option>') + '</select>' +
+        '<output id="f-noise-out" for="f-noise"></output></div>' +
+        '<input type="range" id="f-noise" min="0" max="100" step="1" value="' + F.noise + '" aria-describedby="f-noise-help">' +
+        '<p class="fhelp" id="f-noise-help">Raises the symbol error rate. Watch corrected codewords climb, then uncorrectable ones once codewords pass 15 bad symbols.</p>' +
+      '</fieldset>' +
+      '<fieldset class="fault"><legend>Board lane swap</legend>' +
+        '<label class="check"><input type="checkbox" id="f-swap"' + (F.swap ? ' checked' : '') + '> Swap SerDes 0 and 1 in the channel</label>' +
+        '<p class="fhelp">Harmless: the PCS re-locks and reorders, and the RX PMA lane order changes.</p>' +
+      '</fieldset>' +
+      '<div class="factions"><button type="button" class="btn" id="f-clear">Clear faults</button>' +
+        '<button type="button" class="btn" id="f-relock">Re-lock link</button>' +
+        '<button type="button" class="btn" id="f-reset">Reset counters</button></div>';
+    bind();
+    noiseOut();
+  };
+
+  function noiseOut() {
+    var s = P.noiseToSer(F.noise);
+    $('f-noise-out').textContent = F.noise ? 'SER +' + s.toExponential(1) : 'off';
+  }
+
+  function bind() {
+    $('f-skew').oninput = function (e) { F.skewNs = +e.target.value; $('f-skew-out').textContent = F.skewNs + ' ns'; P.refreshSkew(); };
+    $('f-skew-lane').onchange = function (e) { F.skewLane = +e.target.value; P.refreshSkew(); };
+    $('f-am').onchange = function (e) { F.amLoss = e.target.checked; P.emit('fault'); };
+    $('f-am-lane').onchange = function (e) { F.amLane = +e.target.value; P.emit('fault'); };
+    $('f-los').onchange = function (e) { F.los = e.target.checked; P.emit('fault'); };
+    $('f-los-lane').onchange = function (e) { F.losLane = +e.target.value; P.emit('fault'); };
+    $('f-noise').oninput = function (e) { F.noise = +e.target.value; noiseOut(); P.emit('fault'); };
+    $('f-noise-lane').onchange = function (e) { F.noiseLane = +e.target.value; P.emit('fault'); };
+    $('f-swap').onchange = function (e) { F.swap = e.target.checked; P.rebuild(true); };
+    $('f-clear').onclick = function () {
+      var swapped = F.swap;
+      F.skewNs = 0; F.amLoss = false; F.los = false; F.noise = 0; F.noiseLane = -1; F.swap = false;
+      P.renderFaults();
+      if (swapped) P.rebuild(true); else { P.refreshSkew(); P.emit('fault'); }
+    };
+    $('f-relock').onclick = function () { P.rebuild(true); };
+    $('f-reset').onclick = P.resetCounters;
+  }
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- ui-diag.js ---- */
+/* Diagnostics panel: conceptual readouts, split into standard concepts and
+   implementation-specific telemetry. Built once, values patched in place. */
+(function (P) {
+  'use strict';
+  var S = P.state, $ = function (id) { return document.getElementById(id); };
+  var fmt = function (n) { return Math.round(n).toLocaleString('en-US'); };
+
+  var STD = [
+    { id: 'align', name: 'PCS alignment status', help: 'True only when all 8 PCS lanes have AM lock and are deskewed. False means the RX PCS cannot decode anything and the MAC sees Local Fault. This is the first thing to read.' },
+    { id: 'lock', name: 'AM lock, per PCS lane', help: 'Which lanes the receiver can identify. A set of lanes failing together usually shares one SerDes lane, so look at the physical lane first. A single lane failing while its SerDes neighbours are fine points at whatever handles the lane content (a mux setting, a test pattern, a host-side issue).' },
+    { id: 'order', name: 'Lane mapping and deskew', help: 'Which RX PMA lane each PCS lane arrived on. Any order is legal and it may change after a reset. Repeated or missing lane numbers mean a mux configuration problem. Deskew fails when the spread between lanes exceeds what the receiver can buffer.' },
+    { id: 'corr', name: 'FEC corrected codewords', help: 'Codewords that had at least one symbol error and were fixed. Expected to grow on a healthy PAM4 link. Watch the rate and its trend, not the fact that it is non-zero.' },
+    { id: 'unc', name: 'FEC uncorrectable codewords', help: 'Codewords with more than 15 errored symbols. Should stay at zero. Any growth means corrupted frames reach the MAC (FCS errors), even if the link reports up.' },
+    { id: 'sym', name: 'FEC symbol errors, per PCS lane', help: 'Where the errors are. Map the noisiest PCS lanes back to their SerDes lane through the mapping table: errors concentrated on lanes that share a SerDes lane identify the weak physical lane.' }
+  ];
+  var IMPL = [
+    { id: 'skew', name: 'Measured skew, per lane', help: 'Often exposed as AM arrival offset or deskew FIFO depth. Margin under the budget matters more than the absolute value; lanes drifting toward it point at a long trace or a retimer adding latency.' },
+    { id: 'ser', name: 'Pre-FEC error rate estimate', help: 'Symbol errors divided by symbols received, over the counting window. Vendors report this as SER or as an estimated BER with their own formulas, so compare readings from the same device only.' },
+    { id: 'hist', name: 'Codeword error histogram', help: 'How many codewords had 0, 1, 2 … errored symbols. A healthy link keeps its weight at the left. Weight creeping toward 15 means the link is running out of FEC margin before any uncorrectable codeword appears.' }
+  ];
+
+  function row(r) {
+    return '<div class="drow" id="d-' + r.id + '"><details><summary><span class="dname">' + r.name + '</span>' +
+      '<span class="dval" id="dv-' + r.id + '"></span></summary><p>' + r.help + '</p></details>' +
+      '<div class="dviz" id="dz-' + r.id + '"></div></div>';
+  }
+
+  P.initDiag = function () {
+    $('diag').innerHTML =
+      '<div class="dbanner" id="d-banner" role="status"></div>' +
+      '<h4 class="dgroup">Standard-defined concepts <small>IEEE 802.3 Clause 119 PCS and RS-FEC</small></h4>' +
+      STD.map(row).join('') +
+      '<h4 class="dgroup impl">Implementation-specific telemetry <small>varies by device</small></h4>' +
+      IMPL.map(row).join('') +
+      '<p class="dfoot" id="d-foot"></p>';
+  };
+
+  function dots(fn) {
+    var h = '';
+    for (var p = 0; p < 8; p++) h += fn(p);
+    return '<div class="dots">' + h + '</div>';
+  }
+
+  P.renderDiag = function () {
+    var c = S.c, link = S.link, last = S.lastTick, sel = S.selected;
+    var banner = $('d-banner'), cls, txt;
+    if (!S.align) {
+      var why = S.lock.some(function (L) { return L.state !== 'locked'; }) ? 'a PCS lane has no AM lock' : 'skew exceeds the deskew budget';
+      cls = 'bad'; txt = 'Link down · align_status false: ' + why + '. MAC sees Local Fault.';
+    } else if (S.recentUnc > 0.5) {
+      cls = 'bad'; txt = 'Link up, dropping data · uncorrectable codewords are increasing.';
+    } else if (last && last.lam > 2) {
+      cls = 'warn'; txt = 'Link up · FEC working hard. Corrections are high; margin is shrinking.';
+    } else { cls = 'ok'; txt = 'Link up · aligned, FEC correcting normally.'; }
+    banner.className = 'dbanner ' + cls; banner.textContent = txt;
+
+    $('dv-align').innerHTML = '<span class="pill ' + (S.align ? 'locked' : 'nolock') + '">' + (S.align ? 'true' : 'false') + '</span>';
+    var nLocked = S.lock.filter(function (L) { return L.state === 'locked'; }).length;
+    $('dv-lock').textContent = nLocked + ' / 8 locked';
+    $('dz-lock').innerHTML = dots(function (p) {
+      var v = P.lockView(S.lock[p]);
+      return '<span class="dot ' + v + (sel >= 0 && sel !== p ? ' dim' : '') + '" title="PCS ' + p + ': ' + v + '">' + p + '</span>';
+    });
+    $('dv-order').innerHTML = '<span class="pill ' + (link.deskewOk ? 'locked' : 'nolock') + '">deskew ' + (link.deskewOk ? 'ok' : 'fail') + '</span>';
+    $('dz-order').innerHTML = '<div class="maprow">' + link.byRxPma.map(function (p, i) {
+      return '<span class="mp"><small>RX ' + i + '</small><b class="l' + p + '">PCS ' + p + '</b></span>';
+    }).join('') + '</div>';
+
+    $('dv-corr').innerHTML = fmt(c.corrected) + (last && S.align ? '<small>+' + fmt(last.corrected) + '/ms</small>' : '');
+    $('dv-unc').innerHTML = '<span class="' + (c.uncorrectable ? 'badtxt' : '') + '">' + fmt(c.uncorrectable) + '</span>' +
+      (last && S.align && last.uncorrectable ? '<small class="badtxt">+' + fmt(last.uncorrectable) + '/ms</small>' : '');
+    $('dv-sym').textContent = fmt(c.symbolErrors);
+    var maxL = Math.max.apply(null, c.symLane.concat([1]));
+    $('dz-sym').innerHTML = bars(c.symLane, function (v) { return v ? Math.log10(1 + v) / Math.log10(1 + maxL) : 0; }, fmt);
+
+    $('dv-skew').textContent = 'spread ' + Math.round(link.spreadNs) + ' ns of ' + P.DESKEW_CAP_NS;
+    $('dz-skew').innerHTML = bars(link.lanes.map(function (l) { return l.relSkewNs; }),
+      function (v) { return Math.min(v / 250, 1); }, function (v) { return Math.round(v) + ' ns'; }, P.DESKEW_CAP_NS / 250);
+    var syms = c.codewords * P.RS_N;
+    $('dv-ser').textContent = syms ? (c.symbolErrors / syms).toExponential(2) + ' SER' : '—';
+    var hist = c.hist, hmax = Math.max.apply(null, hist.concat([1]));
+    $('dz-hist').innerHTML = '<div class="hist">' + hist.map(function (v, i) {
+      var h = v ? 8 + 92 * Math.log10(1 + v) / Math.log10(1 + hmax) : 0;
+      return '<span class="hb' + (i > P.RS_T ? ' over' : '') + '" style="height:' + h.toFixed(1) + '%" title="' +
+        (i > P.RS_T ? '>15' : i) + ' errored symbols: ' + fmt(v) + '"></span>';
+    }).join('') + '</div><div class="haxis"><span>0</span><span>t = 15</span><span>&gt;15</span></div>';
+    $('dv-hist').textContent = fmt(c.codewords) + ' codewords';
+    $('d-foot').textContent = 'Simulated link time ' + (S.simMs / 1000).toFixed(2) + ' s (one update per ms of link time, ' +
+      fmt(P.CW_PER_TICK) + ' codewords). Counter widths, read behaviour (clear-on-read, latched, saturating) and register locations are device-specific.';
+  };
+
+  function bars(vals, scale, label, capAt) {
+    var sel = S.selected;
+    return '<div class="bars">' + vals.map(function (v, p) {
+      return '<span class="bar' + (sel >= 0 && sel !== p ? ' dim' : '') + '" title="PCS ' + p + ': ' + label(v) + '"><em>' + p +
+        '</em><span class="track"><i class="l' + p + '" style="width:' + (scale(v) * 100).toFixed(1) + '%"></i>' +
+        (capAt ? '<b class="capline" style="left:' + (capAt * 100).toFixed(1) + '%"></b>' : '') + '</span></span>';
+    }).join('') + '</div>';
+  }
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- figures.js ---- */
+/* Static explanatory figures for the narrative, drawn as inline SVG. */
+(function (P) {
+  'use strict';
+  function lane(i) { return 'style="fill:var(--lane-' + i + ')"'; }
+  function laneS(i) { return 'style="stroke:var(--lane-' + i + ')"'; }
+  function wrap(vb, minW, body, label) {
+    return '<svg class="fig" viewBox="' + vb + '" style="min-width:' + minW + 'px" role="img" aria-label="' + label + '">' + body + '</svg>';
+  }
+  function t(x, y, s, cls) { return '<text x="' + x + '" y="' + y + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + s + '</text>'; }
+
+  function nest() {
+    var h = '', y0 = 34, dy = 26;
+    for (var i = 0; i < 8; i++) {
+      var y = y0 + i * dy;
+      h += t(10, y + 4, 'PCS ' + i, 'lab');
+      h += '<line x1="62" y1="' + y + '" x2="318" y2="' + y + '" class="ln" ' + laneS(i) + '/>';
+      h += t(330, y + 4, 'PMA ' + i, 'sm');
+      var s = Math.floor(i / 2), ys = y0 + (s * 2 + 0.5) * dy;
+      h += '<path d="M380 ' + y + ' C 410 ' + y + ', 410 ' + ys + ', 440 ' + ys + '" class="ln thin" ' + laneS(i) + '/>';
+    }
+    h += '<line x1="322" y1="14" x2="322" y2="236" class="dash"/>';
+    h += '<rect x="376" y="20" width="70" height="210" class="blk"/>' + t(411, 250, 'PMA mux', 'mid');
+    for (var s2 = 0; s2 < 4; s2++) {
+      var yc = y0 + (s2 * 2 + 0.5) * dy;
+      h += '<rect x="452" y="' + (yc - 10) + '" width="380" height="20" rx="10" class="sheath"/>';
+      for (var k = 0; k < 30; k++) {
+        h += '<rect x="' + (462 + k * 12) + '" y="' + (yc - 4) + '" width="9" height="8" ' + lane(s2 * 2 + (k % 2)) + '/>';
+      }
+      h += t(842, yc + 4, 'SerDes ' + s2, 'lab');
+    }
+    h += t(62, 262, 'PCS lanes: logical, identified by AMs', 'cap');
+    h += t(300, 262, '', 'cap');
+    h += t(452, 262, 'SerDes lanes: physical, 2 PCS lanes bit-interleaved on each', 'cap');
+    h += t(330, 10, 'PCS/PMA service interface', 'sm');
+    return wrap('0 0 920 272', 620, h, 'Eight PCS lanes become eight PMA lanes, then are multiplexed two per SerDes lane onto four SerDes lanes');
+  }
+
+  function transcode() {
+    var h = '';
+    for (var i = 0; i < 4; i++) {
+      var y = 18 + i * 34;
+      h += '<rect x="20" y="' + y + '" width="16" height="24" class="hdr"/><rect x="38" y="' + y + '" width="200" height="24" class="pay"/>';
+      h += t(28, y + 16, '2', 'in mid') + t(138, y + 16, '64-bit payload', 'in mid');
+    }
+    h += t(20, 168, '4 × 66-bit blocks = 264 bits', 'cap');
+    h += '<path d="M260 80 L 330 80" class="arrow"/><path d="M322 74 L 332 80 L 322 86" class="arrowhead"/>';
+    h += t(296, 70, 'transcode', 'sm mid');
+    h += '<rect x="350" y="64" width="10" height="34" class="hdr"/>';
+    h += '<rect x="362" y="64" width="380" height="34" class="pay"/>';
+    for (var j = 1; j < 4; j++) h += '<line x1="' + (362 + j * 95) + '" y1="64" x2="' + (362 + j * 95) + '" y2="98" class="seam"/>';
+    h += t(552, 86, '256 bits: the same four payloads', 'in mid');
+    h += t(350, 120, '1 header bit; block types fold into the payload when control is present', 'cap');
+    h += t(350, 168, '1 × 257-bit block', 'cap');
+    return wrap('0 0 760 180', 560, h, 'Four 66-bit blocks are transcoded into one 257-bit block');
+  }
+
+  function dist() {
+    var h = '', x0 = 76, y0 = 30, cw = 44, ch = 22, cols = 14;
+    for (var r = 0; r < 8; r++) {
+      var y = y0 + r * (ch + 4);
+      h += '<rect x="10" y="' + (y + 6) + '" width="10" height="10" ' + lane(r) + '/>' + t(26, y + 15, 'PCS ' + r, 'lab');
+      for (var c = 0; c < cols; c++) {
+        var a = (r + c) % 2 === 0;
+        h += '<rect x="' + (x0 + c * cw) + '" y="' + y + '" width="' + (cw - 4) + '" height="' + ch + '" class="' + (a ? 'cwa' : 'cwb') + '"/>';
+        h += t(x0 + c * cw + (cw - 4) / 2, y + 15, a ? 'A' : 'B', 'in mid' + (a ? '' : ' dark'));
+      }
+    }
+    h += t(x0, 18, '10-bit symbols, time →', 'sm');
+    return wrap('0 0 700 240', 560, h, 'Checkerboard of codeword A and B symbols across eight PCS lanes');
+  }
+
+  function am() {
+    var cells = ['CM0', 'CM1', 'CM2', 'UP0', 'CM3', 'CM4', 'CM5', 'UP1', 'UM0', 'UM1', 'UM2', 'UP2', 'UM3', 'UM4', 'UM5'];
+    var h = '', w = 47;
+    cells.forEach(function (c, i) {
+      var cls = c[1] === 'M' && c[0] === 'C' ? 'cm' : c[0] === 'U' && c[1] === 'M' ? 'um' : 'up';
+      h += '<rect x="' + (10 + i * w) + '" y="26" width="' + (w - 3) + '" height="34" class="' + cls + '"' + (cls === 'um' ? ' ' + lane(5) : '') + '/>';
+      h += t(10 + i * w + (w - 3) / 2, 48, c, 'in mid' + (cls === 'up' ? ' dark' : ''));
+    });
+    h += t(10, 16, '120 bits, first byte sent on the left', 'sm');
+    h += '<rect x="10" y="78" width="12" height="12" class="cm"/>' + t(28, 88, 'Common: identical on all lanes, used to find the marker', 'cap');
+    h += '<rect x="10" y="98" width="12" height="12" class="um" ' + lane(5) + '/>' + t(28, 108, 'Unique: different per lane, names the PCS lane', 'cap');
+    h += '<rect x="10" y="118" width="12" height="12" class="up"/>' + t(28, 128, 'Unique pad: varies per lane, ignored on receive', 'cap');
+    return wrap('0 0 720 140', 560, h, 'Alignment marker layout: common, unique and pad bytes');
+  }
+
+  function mux() {
+    var h = '', x0 = 90, bw = 30;
+    h += t(10, 30, 'PCS 0', 'lab') + t(10, 70, 'PCS 1', 'lab');
+    for (var i = 0; i < 8; i++) {
+      h += '<rect x="' + (x0 + i * bw * 2) + '" y="18" width="' + (bw * 2 - 4) + '" height="18" ' + lane(0) + '/>' + t(x0 + i * bw * 2 + bw - 2, 31, 'a' + i, 'in mid');
+      h += '<rect x="' + (x0 + i * bw * 2 + bw / 2) + '" y="58" width="' + (bw * 2 - 4) + '" height="18" ' + lane(1) + '/>' + t(x0 + i * bw * 2 + bw * 1.5 - 2, 71, 'b' + i, 'in mid');
+    }
+    h += t(10, 132, 'SerDes 0', 'lab');
+    for (var j = 0; j < 16; j++) {
+      var p = j % 2, x = x0 + j * bw;
+      h += '<rect x="' + x + '" y="118" width="' + (bw - 3) + '" height="22" ' + lane(p) + '/>' + t(x + (bw - 3) / 2, 133, (p ? 'b' : 'a') + Math.floor(j / 2), 'in mid');
+      if (j % 2 === 0) h += '<path d="M' + (x + 1) + ' 146 v5 h' + (2 * bw - 5) + ' v-5" class="brk"/>' + t(x + bw - 2, 166, 'PAM4', 'sm mid');
+    }
+    h += '<path d="M380 84 L 380 110" class="arrow"/><path d="M374 102 L 380 112 L 386 102" class="arrowhead"/>';
+    h += t(392, 102, 'bit-interleave at 2× the rate', 'sm');
+    return wrap('0 0 600 176', 560, h, 'Two PCS lanes bit-interleaved onto one PAM4 SerDes lane');
+  }
+
+  function deskew() {
+    var h = '', order = [2, 3, 0, 1, 6, 7, 4, 5], skew = [30, 30, 0, 0, 64, 64, 14, 14];
+    h += t(10, 16, 'At RX PMA output: arbitrary order, skewed', 'sm');
+    h += t(400, 16, 'After deskew and reorder', 'sm');
+    for (var r = 0; r < 8; r++) {
+      var y = 28 + r * 24, p = order[r];
+      h += t(10, y + 12, 'PMA ' + r, 'sm');
+      h += '<rect x="58" y="' + (y + 4) + '" width="290" height="8" class="trk" ' + lane(p) + '/>';
+      h += '<rect x="' + (120 + skew[r]) + '" y="' + y + '" width="9" height="16" ' + lane(p) + ' class="amk"/>';
+      h += t(140 + skew[r], y + 12, 'AM ' + p, 'sm');
+      h += t(400, y + 12, 'PCS ' + r, 'sm');
+      h += '<rect x="448" y="' + (y + 4) + '" width="250" height="8" class="trk" ' + lane(r) + '/>';
+      h += '<rect x="584" y="' + y + '" width="9" height="16" ' + lane(r) + ' class="amk"/>';
+    }
+    h += '<line x1="588" y1="22" x2="588" y2="222" class="dash"/>';
+    return wrap('0 0 720 232', 600, h, 'Alignment markers arrive skewed and out of order, then line up after deskew and reorder');
+  }
+
+  P.drawFigures = function () {
+    var map = { 'fig-nest': nest, 'fig-transcode': transcode, 'fig-dist': dist, 'fig-am': am, 'fig-mux': mux, 'fig-deskew': deskew };
+    Object.keys(map).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = map[id]();
+    });
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- story.js ---- */
+/* Narrative hooks: draw figures and wire "show in the lab" buttons. */
+(function (P) {
+  'use strict';
+  P.initStory = function () {
+    P.drawFigures();
+    document.querySelectorAll('.showme').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (b.dataset.fault === 'noise') {
+          var f = P.state.faults;
+          f.noise = 62; f.noiseLane = 0;
+          P.renderFaults(); P.emit('fault');
+        }
+        document.getElementById('lab').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        P.goStage(+b.dataset.stage);
+        if (!P.state.playing) P.setPlaying(true);
+      });
+    });
+  };
+})(globalThis.PCS = globalThis.PCS || {});
+
+/* ---- main.js ---- */
+/* Boot and frame loop. */
+(function (P) {
+  'use strict';
+  var S = P.state, G = P.g;
+  var VEL = 2.5;            // data units per second at 1x
+  var TICK_MS = 100;        // FEC counter batch per 100 ms of wall time at 1x
+  var visible = true, last = 0, acc = 0, diagAcc = 0, lastWidth = 0;
+
+  function onEvent(what) {
+    if (what === 'link') {
+      P.buildLinkScene(); P.buildLabels(); P.renderMapping(); P.scopeNote();
+      if (S.width !== lastWidth) { lastWidth = S.width; P.renderFaults(); P.sizeScope(); }
+      P.syncToolbar(); P.renderDiag();
+    } else if (what === 'lock' || what === 'align') {
+      P.styleLinkScene(); P.buildLabels(); P.renderMapping(); P.syncToolbar(); P.renderDiag();
+    } else if (what === 'select') {
+      P.styleLinkScene(); P.buildLabels(); P.renderMapping(); P.syncToolbar(); P.renderDiag();
+    } else if (what === 'fault') {
+      P.styleLinkScene(); P.renderDiag();
+    } else if (what === 'stage') {
+      P.buildLabels();
+    } else if (what === 'tick') {
+      // Diagnostics are refreshed from the frame loop at a steady rate.
+    }
+  }
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    var dt = Math.min((now - (last || now)) / 1000, 0.1);
+    last = now;
+    if (S.playing) {
+      S.u += dt * VEL * S.speed;
+      S.stepTo = null;
+      acc += dt * 1000 * S.speed;
+      while (acc >= TICK_MS) { acc -= TICK_MS; P.fecPulse(P.tick()); }
+    } else if (S.stepTo != null) {
+      S.u = Math.min(S.stepTo, S.u + dt * VEL * 3);
+      if (S.u >= S.stepTo) S.stepTo = null;
+    }
+    P.processAms();
+    diagAcc += dt;
+    if (diagAcc > 0.12) { diagAcc = 0; P.renderDiag(); }
+    if (!visible || document.hidden) return;
+    P.updatePulse(dt);
+    P.drawPackets();
+    P.updateCamera(now);
+    G.renderer.render(G.scene, G.camera);
+    P.updateLabels();
+    P.drawScope();
+  }
+
+  function themeChanged() {
+    requestAnimationFrame(function () {
+      P.readTheme(); P.recolorStatic(); P.drawScope();
+    });
+  }
+
+  P.boot = function () {
+    var vp = document.getElementById('viewport');
+    P.initControls();
+    P.initDiag();
+    P.initScope();
+    P.initStory();
+    P.on(onEvent);
+    try {
+      P.initScene(vp);
+    } catch (err) {
+      vp.insertAdjacentHTML('beforeend', '<p class="noscript">This browser could not start WebGL, so the 3D view is unavailable. The mapping table, bit scope, fault lab and diagnostics below still work.</p>');
+      G.failed = true;
+    }
+    if (!G.failed) {
+      P.initLabels(vp);
+      P.initPackets();
+      P.buildBoxes();
+    } else {
+      P.buildLinkScene = P.styleLinkScene = P.buildLabels = P.recolorStatic = function () {};
+    }
+    P.rebuild(false);
+    if (!G.failed) {
+      var narrow = vp.clientWidth < 760;
+      P.flyTo(narrow ? P.framePose(29, 72, 1) : P.framePose(-2, 118, 0.6), 0);
+    }
+    P.goStage(4, false);
+    P.setExplore && !G.failed && P.emit('explore');
+
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', themeChanged);
+    new MutationObserver(themeChanged).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+    new IntersectionObserver(function (es) { visible = es[0].isIntersecting; }, { rootMargin: '120px' }).observe(vp);
+    if (!G.failed) requestAnimationFrame(frame);
+    else setInterval(function () { if (S.playing) { P.tick(); } P.processAms(); P.renderDiag(); P.drawScope(); S.u += 0.25 * S.speed; }, 100);
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', P.boot);
+  else P.boot();
+})(globalThis.PCS = globalThis.PCS || {});
+
+</script>

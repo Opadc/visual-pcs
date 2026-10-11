@@ -1,0 +1,25 @@
+<header class="mast">
+  <a class="brand" href="#top" id="top">Visual PCS <span>IEEE 802.3 · 200GBASE-R</span></a>
+  <nav aria-label="Sections">
+    <a href="#lab">Lane lab</a>
+    <a href="#lanes">Three lanes</a>
+    <a href="#tx">Transmit</a>
+    <a href="#mux">Bit-mux</a>
+    <a href="#rx">Receive</a>
+    <a href="#debug">Debugging</a>
+  </nav>
+</header>
+
+<section class="hero" aria-labelledby="hero-title">
+  <div>
+    <p class="kicker">Ethernet PCS, for people who already know SerDes</p>
+    <h1 id="hero-title">Following a PCS lane <em>from MAC to MAC across a 200G link</em></h1>
+  </div>
+  <p class="lede">A 200GBASE-R PCS splits one stream into 8 logical lanes, and the PMA squeezes those onto however many SerDes lanes the interface has. The receiver gets them back in whatever order and timing the wires deliver, and the alignment markers in the data put them back together. The lab below runs that whole path. Pick a lane, change the width, then break something.</p>
+</section>
+
+<dl class="terms">
+  <div class="term t-pcs"><dt><i></i>PCS lane</dt><dd>A logical stream the PCS creates and tracks. It is identified by the lane number in its alignment markers. 200GBASE-R has 8.</dd></div>
+  <div class="term t-pma"><dt><i></i>PMA lane</dt><dd>A lane at the PCS-to-PMA service interface. On transmit, PMA lane <i>i</i> carries PCS lane <i>i</i>. On receive, any PCS lane can arrive on any PMA lane.</dd></div>
+  <div class="term t-ser"><dt><i></i>SerDes lane</dt><dd>A physical electrical or optical lane: 8, 4 or 2 of them at 200G. Each one may bit-multiplex several PCS lanes.</dd></div>
+</dl>

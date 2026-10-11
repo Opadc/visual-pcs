@@ -1,0 +1,64 @@
+.story { padding-inline: var(--gutter); padding-block: 24px 64px; display: grid; gap: 56px; max-width: 1160px; margin: 0 auto; }
+.story section { display: grid; grid-template-columns: minmax(0, 68ch) minmax(0, 1fr); gap: 16px 40px; align-items: start; }
+.story section > * { grid-column: 1; }
+.story section > .margin { grid-column: 2; grid-row: 2 / span 3; }
+.story section > figure.wide, .story section > .tablewrap { grid-column: 1 / -1; }
+.eyebrow { font-family: var(--f-mono); font-size: var(--s-1); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--ink); padding-top: 10px; }
+.story h2 { font-size: var(--s3); font-stretch: 82%; font-weight: 800; margin-top: -6px; }
+.story p { max-width: 68ch; }
+.steps { margin: 0; padding-left: 1.4em; display: grid; gap: 6px; max-width: 68ch; }
+.steps li::marker { font-family: var(--f-display); font-weight: 700; }
+figure { margin: 4px 0; display: grid; gap: 8px; min-width: 0; }
+.figwrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); padding: 12px; }
+figcaption { font-family: var(--f-display); font-size: var(--s-0); color: var(--muted); max-width: 70ch; }
+.margin { border-left: 2px solid var(--ink); padding: 2px 0 2px 16px; display: grid; gap: 6px; font-size: 0.95rem; color: var(--ink-2); }
+.margin h3 { font-size: var(--s-0); letter-spacing: 0.06em; text-transform: uppercase; font-stretch: 100%; }
+.showme { justify-self: start; }
+
+.cmp { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.cmp th, .cmp td { text-align: left; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.cmp thead th { font-family: var(--f-display); font-size: var(--s-1); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-bottom-color: var(--ink); }
+.cmp tbody th { font-family: var(--f-display); font-weight: 600; font-size: var(--s-0); white-space: nowrap; }
+.cmp.debug td:first-child { font-weight: 600; }
+.cmp code { white-space: nowrap; }
+.tablewrap { overflow-x: auto; }
+.tablewrap .cmp { min-width: 560px; }
+
+.refs { border-top: 1px solid var(--rule); padding-top: 16px; }
+.refs h2 { font-size: var(--s2); }
+.refs ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; font-size: 0.92rem; max-width: 80ch; }
+.fine { font-size: 0.84rem; color: var(--muted); }
+
+svg.fig { display: block; width: 100%; height: auto; font-family: var(--f-mono); }
+svg.fig text { fill: var(--ink-2); font-size: 11px; }
+svg.fig .lab { fill: var(--ink); font-weight: 600; }
+svg.fig .sm { font-size: 10px; fill: var(--muted); }
+svg.fig .cap { font-family: var(--f-display); font-size: 11px; fill: var(--muted); }
+svg.fig .mid { text-anchor: middle; }
+svg.fig .in { fill: var(--paper); font-size: 10px; font-weight: 600; }
+svg.fig .in.dark { fill: var(--ink); }
+svg.fig .ln { stroke-width: 6; fill: none; }
+svg.fig .ln.thin { stroke-width: 3; }
+svg.fig .dash { stroke: var(--muted); stroke-dasharray: 4 3; fill: none; }
+svg.fig .blk { fill: var(--scene-box); stroke: var(--scene-edge); }
+svg.fig .sheath { fill: color-mix(in srgb, var(--ink) 9%, transparent); stroke: var(--rule); }
+svg.fig .hdr { fill: var(--ink); }
+svg.fig .pay { fill: var(--cw-a); }
+svg.fig .seam { stroke: var(--paper); stroke-dasharray: 3 2; }
+svg.fig .arrow { stroke: var(--ink); stroke-width: 1.5; fill: none; }
+svg.fig .arrowhead { fill: var(--ink); stroke: none; }
+svg.fig .cwa { fill: var(--cw-a); }
+svg.fig .cwb { fill: var(--cw-b); }
+svg.fig .cm { fill: var(--ink-2); }
+svg.fig .um { stroke: none; }
+svg.fig .up { fill: var(--rule); }
+svg.fig .brk { stroke: var(--muted); fill: none; }
+svg.fig .trk { opacity: 0.35; }
+svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
+
+@media (max-width: 900px) {
+  .story section { grid-template-columns: minmax(0, 1fr); }
+  .story section > .margin { grid-column: 1; grid-row: auto; }
+}
+
+.site-foot { padding-inline: var(--gutter); padding-block: 18px 28px; border-top: 1px solid var(--rule); font-family: var(--f-mono); font-size: 0.72rem; color: var(--muted); }

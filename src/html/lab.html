@@ -1,0 +1,92 @@
+<section class="lab" id="lab" aria-labelledby="lab-title">
+  <div class="lab-head">
+    <h2 id="lab-title">Lane lab <span>200GBASE-R · 8 PCS lanes · one direction of the link</span></h2>
+    <p id="lab-summary" class="lab-summary" aria-live="polite"></p>
+  </div>
+
+  <div class="toolbar" role="toolbar" aria-label="Lane lab controls">
+    <div class="tgroup" aria-label="Playback">
+      <button type="button" id="btn-play" class="btn primary" aria-pressed="true" title="Pause or resume (Space)">Pause</button>
+      <button type="button" id="btn-step" class="btn" title="Advance one data unit (.)">Step</button>
+      <label class="field"><span>Speed</span>
+        <select id="sel-speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+      </label>
+    </div>
+    <div class="tgroup" aria-label="SerDes lane width">
+      <span class="tlabel" id="w-label">SerDes lanes</span>
+      <div class="seg" role="radiogroup" aria-labelledby="w-label">
+        <button type="button" role="radio" class="segbtn" data-width="8" id="w8">8 × NRZ</button>
+        <button type="button" role="radio" class="segbtn" data-width="4" id="w4">4 × PAM4</button>
+        <button type="button" role="radio" class="segbtn" data-width="2" id="w2">2 × PAM4</button>
+      </div>
+    </div>
+    <div class="tgroup" aria-label="Mux mapping">
+      <span class="tlabel" id="m-label">Mapping</span>
+      <div class="seg" role="radiogroup" aria-labelledby="m-label">
+        <button type="button" role="radio" class="segbtn" data-preset="grouped" id="mg">Grouped</button>
+        <button type="button" role="radio" class="segbtn" data-preset="interleaved" id="mi">Interleaved</button>
+        <button type="button" role="radio" class="segbtn" data-preset="remapped" id="mr">Remapped</button>
+      </div>
+    </div>
+    <div class="tgroup" aria-label="View">
+      <button type="button" id="btn-overview" class="btn" title="Show the whole link">Whole link</button>
+      <button type="button" id="btn-explore" class="btn" aria-pressed="false" title="Let drag and pinch move the 3D camera">Drag to explore</button>
+    </div>
+  </div>
+
+  <div class="lanepick" role="group" aria-label="Follow one PCS lane">
+    <span class="tlabel">Follow lane</span>
+    <button type="button" class="chip all" data-lane="-1" aria-pressed="true">All</button>
+    <button type="button" class="chip l0" data-lane="0" aria-pressed="false"><i></i>0</button>
+    <button type="button" class="chip l1" data-lane="1" aria-pressed="false"><i></i>1</button>
+    <button type="button" class="chip l2" data-lane="2" aria-pressed="false"><i></i>2</button>
+    <button type="button" class="chip l3" data-lane="3" aria-pressed="false"><i></i>3</button>
+    <button type="button" class="chip l4" data-lane="4" aria-pressed="false"><i></i>4</button>
+    <button type="button" class="chip l5" data-lane="5" aria-pressed="false"><i></i>5</button>
+    <button type="button" class="chip l6" data-lane="6" aria-pressed="false"><i></i>6</button>
+    <button type="button" class="chip l7" data-lane="7" aria-pressed="false"><i></i>7</button>
+    <span class="keys" aria-hidden="true">Keys: P pause · . step · 0–7 lane · Esc all</span>
+  </div>
+
+  <div class="viewport" id="viewport">
+    <div class="legend" aria-label="Legend">
+      <span><i class="lg-cube"></i>data unit on a PCS lane</span>
+      <span><i class="lg-am"></i>alignment marker</span>
+      <span><i class="lg-ring"></i>AM lock</span>
+      <span><i class="lg-sheath"></i>physical SerDes lane</span>
+      <span><i class="lg-bad"></i>error</span>
+    </div>
+    <p id="lab-hint" class="lab-hint" hidden></p>
+    <p class="vp-help" id="vp-help">Drag to pan · right-drag to rotate · Ctrl + scroll to zoom</p>
+    <noscript><p class="noscript">The lane lab needs JavaScript and WebGL.</p></noscript>
+  </div>
+
+  <nav class="rail" id="rail" aria-label="Pipeline stages"></nav>
+
+  <article class="stage-detail" id="stage-detail" aria-live="polite"></article>
+
+  <div class="panels">
+    <section class="panel" aria-labelledby="map-title">
+      <header><h3 id="map-title">PCS-to-SerDes mapping</h3><span class="tag std">Standard concept</span></header>
+      <div class="order" id="order-strip"></div>
+      <div class="tablewrap"><table class="maptable" id="map-table"></table></div>
+      <p class="note" id="map-note"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="scope-title">
+      <header><h3 id="scope-title">Bit scope</h3><span class="tag">Time-interleaved bits per SerDes lane</span></header>
+      <div class="scopewrap"><canvas id="scope" role="img" aria-label="Bit interleaving on each SerDes lane"></canvas></div>
+      <p class="note" id="scope-note"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="fault-title">
+      <header><h3 id="fault-title">Fault lab</h3><span class="tag">Simulated</span></header>
+      <div class="faults" id="faults"></div>
+    </section>
+
+    <section class="panel diag" aria-labelledby="diag-title">
+      <header><h3 id="diag-title">Diagnostics</h3><span class="tag">Conceptual readouts</span></header>
+      <div id="diag"></div>
+    </section>
+  </div>
+</section>

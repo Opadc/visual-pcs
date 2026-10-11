@@ -1,0 +1,64 @@
+/* Layout: a lab bench. Full-bleed 3D lane diagram up top with its readouts
+   below like a scope's measurement bar; a single reading column after it, with
+   wide figures breaking out. Colour is reserved for lane identity and state;
+   everything else is ink on a cool drafting paper. */
+:root {
+  --paper: #f3f5f7;
+  --panel: #ffffff;
+  --ink: #18202b;
+  --ink-2: #3b4655;
+  --muted: #687384;
+  --rule: #d5dbe3;
+  --rule-2: #e6eaf0;
+  --scene-bg: #eef1f5;
+  --scene-box: #dde3eb;
+  --scene-edge: #8592a5;
+  --focus: #2b4bd6;
+  --good: #2f8a4c;
+  --warn: #c98a12;
+  --bad: #cc2936;
+  --am: #e2a41f;
+  --cw-a: #5c6b82;
+  --cw-b: #9aa6b8;
+  --lane-0: #e08a00;
+  --lane-1: #2f9fd8;
+  --lane-2: #079a72;
+  --lane-3: #d4542a;
+  --lane-4: #c7569c;
+  --lane-5: #2e58b8;
+  --lane-6: #8f8a1b;
+  --lane-7: #7a4fc4;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --s-1: 0.75rem;
+  --s-0: 0.875rem;
+  --s1: 1.0625rem;
+  --s2: 1.3rem;
+  --s3: 1.75rem;
+  --s4: clamp(2.1rem, 4.2vw + 0.6rem, 3.6rem);
+  --gutter: clamp(16px, 3vw, 40px);
+  --radius: 4px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f141b; --panel: #161d27; --ink: #e5e9ef; --ink-2: #c1c9d4; --muted: #8b96a6;
+    --rule: #2a3442; --rule-2: #202937; --scene-bg: #121922; --scene-box: #253041; --scene-edge: #6c7a8f;
+    --focus: #8ea6ff; --good: #4cc276; --warn: #e5b23a; --bad: #ff5d68; --am: #f0bd45;
+    --cw-a: #8492a8; --cw-b: #55627a;
+    --lane-0: #f5a524; --lane-1: #5cc0f2; --lane-2: #2fc596; --lane-3: #ff7a4d;
+    --lane-4: #ee82c2; --lane-5: #7c9cf0; --lane-6: #c9c23e; --lane-7: #a98bf0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f141b; --panel: #161d27; --ink: #e5e9ef; --ink-2: #c1c9d4; --muted: #8b96a6;
+  --rule: #2a3442; --rule-2: #202937; --scene-bg: #121922; --scene-box: #253041; --scene-edge: #6c7a8f;
+  --focus: #8ea6ff; --good: #4cc276; --warn: #e5b23a; --bad: #ff5d68; --am: #f0bd45;
+  --cw-a: #8492a8; --cw-b: #55627a;
+  --lane-0: #f5a524; --lane-1: #5cc0f2; --lane-2: #2fc596; --lane-3: #ff7a4d;
+  --lane-4: #ee82c2; --lane-5: #7c9cf0; --lane-6: #c9c23e; --lane-7: #a98bf0;
+  color-scheme: dark;
+}
+.l0 { --lc: var(--lane-0); } .l1 { --lc: var(--lane-1); } .l2 { --lc: var(--lane-2); } .l3 { --lc: var(--lane-3); }
+.l4 { --lc: var(--lane-4); } .l5 { --lc: var(--lane-5); } .l6 { --lc: var(--lane-6); } .l7 { --lc: var(--lane-7); }

@@ -1,0 +1,86 @@
+<section id="am" aria-labelledby="am-title">
+  <p class="eyebrow">Part 3</p>
+  <h2 id="am-title">Alignment markers carry the lane identity</h2>
+  <p>Each PCS lane gets a 120-bit alignment marker at a fixed interval. The <b>common</b> bytes are the same on every lane, so the receiver can find AMs without knowing anything else. The <b>unique</b> bytes differ per lane and tell it which PCS lane it found. The pad bytes are ignored on receive.</p>
+  <figure>
+    <div class="figwrap" id="fig-am"></div>
+    <figcaption>One alignment marker, 15 bytes. The eight markers go in together, so they leave the transmitter lined up across all lanes.</figcaption>
+  </figure>
+  <p>In 200GBASE-R the AM group repeats every 81,920 257-bit blocks of the aggregate stream, about 2.6 Mbit or 99 µs on each PCS lane. The lab shrinks that spacing so you can see markers pass. Because AMs are detected in raw lane data before FEC decoding, the receiver tolerates a few bit errors in them.</p>
+</section>
+
+<section id="mux" aria-labelledby="mux-title">
+  <p class="eyebrow">Part 4</p>
+  <h2 id="mux-title">PMA bit-multiplexing</h2>
+  <p>When there are fewer SerDes lanes than PCS lanes, the PMA interleaves PCS lanes <b>bit by bit</b>. Four SerDes lanes carry two PCS lanes each; two carry four each. The PMA picks which PCS lanes share a SerDes lane and holds that choice for as long as the link is up. A given PCS lane never wanders to another SerDes lane during normal operation.</p>
+  <figure>
+    <div class="figwrap" id="fig-mux"></div>
+    <figcaption>Two PCS lanes on one PAM4 SerDes lane. Bits alternate, and each PAM4 symbol carries one bit from each.</figcaption>
+  </figure>
+  <p>Two consequences matter in the lab. A SerDes lane's skew is shared by every PCS lane it carries, so the lanes slip together. And one bad PAM4 symbol can hit two PCS lanes at once, which is part of why per-PCS-lane error counts tend to rise in groups.</p>
+  <button type="button" class="btn showme" data-stage="5">Show the bit-mux in the lab</button>
+</section>
+
+<section id="rx" aria-labelledby="rx-title">
+  <p class="eyebrow">Part 5</p>
+  <h2 id="rx-title">Receive: find, line up, reorder, then decode</h2>
+  <p>The RX PMA recovers each SerDes lane and demultiplexes it, but it cannot tell PCS lanes apart, and the bit phase it starts on is arbitrary. So the RX PCS gets 8 streams in an unknown order with unknown relative delay. It then:</p>
+  <ol class="steps">
+    <li><b>Locks</b> on each PMA lane by finding the common AM pattern repeating at the right spacing, and reads the lane number from the unique bytes.</li>
+    <li><b>Deskews</b> by buffering early lanes until all AMs line up. 802.3 budgets about 180 ns of skew at the PCS receive input.</li>
+    <li><b>Reorders</b> lanes into PCS lane order 0 to 7.</li>
+    <li>Sets <code>align_status</code> true. Only now can it de-interleave codewords, run <b>RS(544,514) decode</b>, remove AMs, descramble, reverse the transcode and decode 64B/66B.</li>
+  </ol>
+  <figure>
+    <div class="figwrap" id="fig-deskew"></div>
+    <figcaption>Before deskew, AMs reach the PCS at different times. After deskew they line up, and the lanes are reordered by the lane number each AM carries.</figcaption>
+  </figure>
+  <p>Deskew and reorder have to come before FEC, because every codeword is spread across all 8 lanes. A single missing lane means no codewords at all, which is why one bad SerDes lane takes the whole link down instead of just its share of the bandwidth.</p>
+  <button type="button" class="btn showme" data-stage="8">Show RX alignment in the lab</button>
+</section>
+
+<section id="debug" aria-labelledby="debug-title">
+  <p class="eyebrow">Part 6</p>
+  <h2 id="debug-title">Reading the link from the bottom up</h2>
+  <p>Work in the same order the receiver does. SerDes signal first (CDR lock, signal detect, eye or SNR). Then PCS alignment. Then FEC margin. Then the MAC. Each layer only means something once the one below it is healthy.</p>
+  <div class="tablewrap">
+    <table class="cmp debug">
+      <caption class="sr">Symptoms, what they suggest, and what to check next</caption>
+      <thead><tr><th scope="col">What you see</th><th scope="col">What it suggests</th><th scope="col">Check next</th></tr></thead>
+      <tbody>
+        <tr><td>No AM lock on the PCS lanes of one SerDes lane</td><td>That physical lane is not delivering clean bits</td><td>CDR lock, signal detect, polarity, PRBS on that lane</td></tr>
+        <tr><td>No AM lock on one PCS lane, its SerDes neighbours fine</td><td>Lane content problem rather than signal</td><td>Mux or gearbox configuration, test pattern or loopback left enabled</td></tr>
+        <tr><td>All lanes locked, <code>align_status</code> false</td><td>Skew beyond the deskew budget, or a lane number repeated</td><td>Per-lane AM arrival offset; lane mapping for duplicates</td></tr>
+        <tr><td>Lane mapping differs after each reset</td><td>Normal demux start-up phase</td><td>Nothing, unless lane numbers repeat or go missing</td></tr>
+        <tr><td>Corrected codewords rising, uncorrectable zero</td><td>Normal on PAM4; FEC doing its job</td><td>Trend over time, per-lane symbol errors, codeword histogram</td></tr>
+        <tr><td>Symbol errors concentrated on some PCS lanes</td><td>One weak SerDes lane</td><td>Map those PCS lanes to their SerDes lane; tune that lane</td></tr>
+        <tr><td>Uncorrectable codewords increasing</td><td>Frames are being corrupted</td><td>Pre-FEC error rate on every lane; MAC FCS error counters</td></tr>
+        <tr><td>FCS errors at the MAC, FEC counters clean</td><td>Problem above the PCS</td><td>MAC, host interface, or the far-end transmitter</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <aside class="margin">
+    <h3>Standard concept or vendor telemetry?</h3>
+    <p>IEEE 802.3 defines the ideas: alignment status, per-lane AM lock, the lane mapping, corrected and uncorrected codeword counts, and per-lane FEC symbol error counts, along with management variables for them. Register addresses, counter widths, clear-on-read behaviour, skew readouts, error histograms and BER estimates are up to each device. The lab's diagnostics panel keeps the two groups apart.</p>
+  </aside>
+  <button type="button" class="btn showme" data-stage="9" data-fault="noise">Try a noisy lane in the lab</button>
+</section>
+
+<section id="scale" aria-labelledby="scale-title">
+  <p class="eyebrow">Part 7</p>
+  <h2 id="scale-title">Beyond 200G</h2>
+  <p><b>400GBASE-R</b> uses the same Clause 119 PCS with 16 PCS lanes instead of 8, and AM groups every 163,840 257-bit blocks. Everything above carries over at twice the width. For 400G, 16 PCS lanes allow 16, 8, 4, 2 or 1 physical lanes; at 200G, 8 PCS lanes allow 8, 4, 2 or 1.</p>
+  <p><b>800G</b> is often pictured as two 400G flows side by side, and the 800GBASE-R PCS does reuse 400G-style FEC groups. Treat that as a mental model. It is not a statement about how any particular device or PHY type is built. Newer PHYs with 200 Gb/s per physical lane also add sublayers not shown here.</p>
+</section>
+
+<section id="refs" aria-labelledby="refs-title" class="refs">
+  <h2 id="refs-title">Sources</h2>
+  <ul>
+    <li>IEEE Std 802.3, Clause 119 (200GBASE-R and 400GBASE-R PCS), Clause 120 (PMA), Clause 116 (architecture and skew budgets), Clause 45 (management). <a href="https://standards.ieee.org/ieee/802.3/10422/">IEEE 802.3-2022</a></li>
+    <li><a href="https://ethernetalliance.org/blog/2018/03/28/a-deep-dive-into-the-802-3bs-200gbase-r-and-400gbase-r-pcspma/">A Deep Dive into the 802.3bs 200GBASE-R and 400GBASE-R PCS/PMA</a>, Ethernet Alliance</li>
+    <li><a href="https://www.ieee802.org/3/bs/public/16_03/butter_3bs_02_0316.pdf">Alignment marker mapping and insertion</a>, IEEE P802.3bs task force</li>
+    <li><a href="https://www.ieee802.org/3/bs/">IEEE P802.3bs 200 Gb/s and 400 Gb/s Ethernet Task Force</a></li>
+  </ul>
+  <p class="fine">Counts and timings in the lab are scaled so you can watch them. AM spacing, lock thresholds and error rates are illustrative. Diagnostic readouts are conceptual; no register addresses or vendor names are implied.</p>
+</section>
+</article>

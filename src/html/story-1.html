@@ -1,0 +1,52 @@
+<article class="story">
+<section id="lanes" aria-labelledby="lanes-title">
+  <p class="eyebrow">Part 1</p>
+  <h2 id="lanes-title">Three things called "lane"</h2>
+  <p>Most confusion in PCS debugging comes from one word doing three jobs. A <b>PCS lane</b> is a stream of data with an identity. A <b>PMA lane</b> is a position on the service interface between PCS and PMA. A <b>SerDes lane</b> is a physical path with a driver, a channel and a CDR. They line up one-to-one only in the 8-lane NRZ case.</p>
+  <figure class="wide">
+    <div class="figwrap" id="fig-nest"></div>
+    <figcaption>The 4-lane case. Eight PCS lanes cross the PMA service interface as eight PMA lanes; the PMA interleaves them two per SerDes lane.</figcaption>
+  </figure>
+  <div class="tablewrap">
+    <table class="cmp">
+      <caption class="sr">Comparison of PCS, PMA and SerDes lanes</caption>
+      <thead><tr><th scope="col"></th><th scope="col">PCS lane</th><th scope="col">PMA lane</th><th scope="col">SerDes lane</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">What it is</th><td>Logical stream of FEC symbols</td><td>Position at the PCS/PMA service interface</td><td>Physical electrical or optical lane</td></tr>
+        <tr><th scope="row">Identity comes from</th><td>Lane number in its alignment markers</td><td>Its index on the interface</td><td>The pin, trace, or wavelength</td></tr>
+        <tr><th scope="row">Count at 200G</th><td>Always 8</td><td>8 at the PCS boundary</td><td>8, 4 or 2</td></tr>
+        <tr><th scope="row">Rate</th><td>26.5625 Gb/s</td><td>26.5625 Gb/s</td><td>26.5625, 53.125 or 106.25 Gb/s</td></tr>
+        <tr><th scope="row">Order on receive</th><td>Restored by the PCS</td><td>Arbitrary</td><td>Whatever the board routes</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <aside class="margin">
+    <h3>Where a retimer sits</h3>
+    <p>A retimer or gearbox is a PMA. It recovers each SerDes lane, demultiplexes it into PCS-lane-rate streams, and multiplexes them out again, possibly to a different width. It moves bits without decoding them, so it does not need to know which PCS lane is which. What it must do is keep a fixed mapping while the link is up and stay inside the skew budget.</p>
+  </aside>
+</section>
+
+<section id="tx" aria-labelledby="tx-title">
+  <p class="eyebrow">Part 2</p>
+  <h2 id="tx-title">Transmit: one stream becomes eight lanes</h2>
+  <p>On transmit, the PCS works on a single aggregate stream until the very last step. The order is defined by IEEE 802.3 Clause 119, and it matters for debugging because it decides what each later stage can see.</p>
+  <ol class="steps">
+    <li><b>64B/66B encode</b> each 8 bytes from 200GMII into a 66-bit block. Idles are deleted here to make room for alignment markers.</li>
+    <li><b>Transcode</b> four 66-bit blocks into one 256B/257B block. Same data, packed tighter. This is a transcode of the 64B/66B blocks, not a second line code.</li>
+    <li><b>Scramble</b> the 257-bit blocks.</li>
+    <li><b>Insert alignment markers</b>, one per PCS lane, as a group. They go in after the scrambler, so they stay recognizable in raw lane data.</li>
+    <li><b>Pre-FEC distribution</b>: split the stream 10 bits at a time between two Reed-Solomon encoders.</li>
+    <li><b>RS(544,514) encode</b> into codewords A and B. AMs are inside the codewords, so FEC protects them.</li>
+    <li><b>Symbol distribution</b>: deal 10-bit symbols from both codewords round-robin onto the 8 PCS lanes.</li>
+  </ol>
+  <figure>
+    <div class="figwrap" id="fig-transcode"></div>
+    <figcaption>Transcoding packs the four 2-bit sync headers into one header bit plus a little control information. The 257-bit block carries the same 256 payload bits.</figcaption>
+  </figure>
+  <p>The last step is why the receiver has so much work to do. Each PCS lane carries a slice of every codeword, so nothing can be decoded until all 8 lanes have been found, lined up and put in order.</p>
+  <figure>
+    <div class="figwrap" id="fig-dist"></div>
+    <figcaption>Illustrative symbol distribution. Symbols from codewords A and B alternate across lanes and over time in a checkerboard. Every codeword spans all 8 PCS lanes, and an error burst on one physical lane is split between two codewords.</figcaption>
+  </figure>
+  <button type="button" class="btn showme" data-stage="3">Show stage 3 in the lab</button>
+</section>

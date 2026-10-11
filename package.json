@@ -1,0 +1,12 @@
+{
+  "name": "visual-pcs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interactive 3D explainer for the 200GBASE-R Ethernet PCS lane architecture",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/*.test.mjs",
+    "serve": "python3 -m http.server 8080"
+  }
+}
