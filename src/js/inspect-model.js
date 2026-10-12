@@ -27,7 +27,7 @@
 
   function symbolInfo(s) {
     var out = { w: s.w, i: s.i, k: s.k, parity: !!s.parity };
-    if (s.parity) { out.p = s.p; return out; }
+    if (s.parity) { out.p = s.p; out.hex = P.hex(s.value, 3); out.bits = s.bits; return out; }
     out.hex = P.hex(s.value, 3); out.bits = s.bits;
     out.parts = s.parts.map(function (pt) {
       if (pt.src === 'b') return { kind: 'byte', idx: pt.idx, ch: P.byteAt(pt.idx), n: pt.n, bits: pt.bits };

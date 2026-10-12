@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../src/js/model.js';
+import '../src/js/rs.js';
 import '../src/js/payload.js';
 
 // Checks the bit model against the IEEE P802.3bs D3.1 Clause 119 equations.

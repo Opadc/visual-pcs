@@ -7,7 +7,7 @@ const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 
 const CSS = ['tokens', 'base', 'lab', 'panels', 'story'].map((f) => read(`src/css/${f}.css`)).join('\n');
 const HTML = ['intro', 'lab', 'story-1', 'story-2', 'footer'].map((f) => read(`src/html/${f}.html`)).join('\n');
-const JS = ['model', 'fec', 'payload', 'state', 'paths', 'content', 'scene-core', 'scene-static', 'packets', 'labels',
+const JS = ['model', 'fec', 'rs', 'payload', 'state', 'paths', 'content', 'scene-core', 'scene-static', 'packets', 'labels',
   'inspect-model', 'inspector', 'follow', 'lens', 'ui-controls', 'ui-map', 'ui-faults', 'ui-diag', 'figures', 'story', 'main']
   .map((f) => `/* ---- ${f}.js ---- */\n` + read(`src/js/${f}.js`)).join('\n');
 

@@ -20,8 +20,8 @@
   };
 
   P.step = function () {
+    if (P.viewOpen && P.viewOpen()) { P.viewStep(); return; }
     if (S.playing) P.setPlaying(false);
-    P.lensStep && P.lensStep();
     S.stepTo = (S.stepTo != null ? S.stepTo : S.u) + P.GAP;
     P.fecPulse(P.tick());
   };
@@ -66,12 +66,12 @@
       st.side + '</span><h3>' + st.title + '</h3></div><div class="sd-body">' + st.body +
       '<p class="sd-watch"><b>In the scene:</b> ' + st.watch + '</p>' +
       (st.lens ? '<p class="sd-lens">See it at bit scale: ' + st.lens.map(function (m) {
-        return '<button type="button" class="linkbtn" data-open-lens="' + m + '">' + P.LENS_MODES[m].title + '</button>';
+        return '<button type="button" class="linkbtn" data-open-lens="' + m + '">' + P.VIEWS[m].title + '</button>';
       }).join(' · ') + '</p>' : '') + '</div><div class="sd-nav">' +
       '<button type="button" class="btn" id="sd-prev"' + (n === 1 ? ' disabled' : '') + '>← Previous stage</button>' +
       '<button type="button" class="btn" id="sd-next"' + (n === 9 ? ' disabled' : '') + '>Next stage →</button></div>';
     d.querySelectorAll('[data-open-lens]').forEach(function (b) {
-      b.onclick = function () { P.setLens(b.dataset.openLens); $('lens').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+      b.onclick = function () { P.openView(b.dataset.openLens); };
     });
     $('sd-prev').onclick = function () { P.goStage(n - 1, true); };
     $('sd-next').onclick = function () { P.goStage(n + 1, true); };
@@ -150,6 +150,13 @@
       var t = e.target;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      // With a step view open, P and . drive the view; the dialog handles Esc itself.
+      if (P.viewOpen && P.viewOpen()) {
+        if (e.key === 'p' || e.key === 'P') document.getElementById('opv-play').click();
+        else if (e.key === '.') P.viewStep();
+        else return;
+        e.preventDefault(); return;
+      }
       if (e.key === 'p' || e.key === 'P') { P.setPlaying(!S.playing); }
       else if (e.key === '.') { P.step(); }
       else if (/^[0-7]$/.test(e.key)) { P.selectLane(+e.key); }

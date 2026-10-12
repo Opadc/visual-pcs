@@ -14,6 +14,7 @@
 
   P.buildBoxes = function () {
     if (G.boxGroup) disposeGroup(G.boxGroup);
+    if (P.resetBoxHover) P.resetBoxHover();
     var grp = G.boxGroup = new T.Group();
     G.boxes = [];
     P.BOXES.forEach(function (b) {

@@ -62,7 +62,7 @@
       <span><i class="lg-bad"></i>error</span>
     </div>
     <p id="lab-hint" class="lab-hint" hidden></p>
-    <p class="vp-click" id="vp-click">Click any block to see what it carries</p>
+    <p class="vp-click" id="vp-click">Click a block to see what it carries · click a box to see how that step works</p>
     <div class="follow-bar" id="follow-bar" hidden><span>Following <b></b></span><span id="follow-where"></span>
       <button type="button" class="btn" id="follow-stop">Stop following</button></div>
     <p class="vp-help" id="vp-help">Drag to pan · right-drag to rotate · Ctrl + scroll to zoom</p>
@@ -73,19 +73,36 @@
     <div class="lens-bar">
       <h3 id="lens-title">Bit lens</h3>
       <div class="lens-modes" role="group" aria-label="Show one operation at bit scale">
-        <button type="button" class="btn" data-lens="am" aria-pressed="false">AM insertion</button>
-        <button type="button" class="btn" data-lens="prefec" aria-pressed="false">Pre-FEC distribution</button>
-        <button type="button" class="btn" data-lens="rs" aria-pressed="false">RS(544,514)</button>
-        <button type="button" class="btn" data-lens="dist" aria-pressed="false">Symbol distribution</button>
-        <button type="button" class="btn" data-lens="mux" aria-pressed="false">Bit-mux</button>
+        <button type="button" class="btn" data-view="b66">64B/66B</button>
+        <button type="button" class="btn" data-view="b257">256B/257B</button>
+        <button type="button" class="btn" data-view="am">AM insertion</button>
+        <button type="button" class="btn" data-view="prefec">Pre-FEC distribution</button>
+        <button type="button" class="btn" data-view="rs">RS(544,514)</button>
+        <button type="button" class="btn" data-view="dist">Symbol distribution</button>
+        <button type="button" class="btn" data-view="mux">Bit-mux</button>
       </div>
-      <span class="lens-hint">Slow motion at true bit scale. Pause and Step work here too.</span>
-    </div>
-    <div class="lens-body" id="lens-body" hidden>
-      <div class="lenswrap"><canvas id="lens-canvas" role="img" aria-describedby="lens-note"></canvas></div>
-      <div class="lens-foot"><p id="lens-note" class="note"></p><button type="button" class="btn" id="lens-close">Close lens</button></div>
+      <span class="lens-hint">Input on the left, output on the right. Or click a box in the 3D view.</span>
     </div>
   </section>
+
+  <dialog class="opview" id="opview" aria-labelledby="opv-title" aria-describedby="opv-note">
+    <div class="opv-inner">
+      <header class="opv-head">
+        <div><h3 id="opv-title"></h3><p class="opv-where" id="opv-where"></p></div>
+        <button type="button" class="ins-x" data-act="close" aria-label="Close">×</button>
+      </header>
+      <div class="opv-wrap" id="opv-wrap"><canvas id="opv-canvas" role="img"></canvas></div>
+      <p class="note opv-note" id="opv-note"></p>
+      <footer class="opv-foot">
+        <button type="button" class="btn" data-act="prev" id="opv-prev" title="The unit before this one (←)">← Prev</button>
+        <button type="button" class="btn" data-act="next" id="opv-next" title="The unit after this one (→)">Next →</button>
+        <span class="opv-sp"></span>
+        <span class="opv-count" id="opv-count" aria-live="polite"></span>
+        <button type="button" class="btn" data-act="step" id="opv-step" title="Add one unit (.)">Step</button>
+        <button type="button" class="btn primary" data-act="play" id="opv-play" title="Replay one unit at a time (P)">Animate</button>
+      </footer>
+    </div>
+  </dialog>
 
   <nav class="rail" id="rail" aria-label="Pipeline stages"></nav>
 

@@ -81,17 +81,32 @@ input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offs
 .lbl-callout { font-size: 11px; font-weight: 600; color: var(--ink); background: var(--panel); border: 1px solid var(--lc); border-radius: 3px; padding: 2px 6px; box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 12%, transparent); }
 
 .lens { margin-top: 10px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); }
-.lens.open { border-color: var(--ink); }
 .lens-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 10px; }
 .lens-bar h3 { font-size: var(--s-0); letter-spacing: 0.07em; text-transform: uppercase; font-stretch: 100%; }
 .lens-modes { display: flex; flex-wrap: wrap; gap: 6px; }
 .lens-modes .btn { min-height: 30px; padding: 2px 10px; font-size: 0.8rem; }
 .lens-hint { font-family: var(--f-mono); font-size: 0.68rem; color: var(--muted); }
-.lens-body { border-top: 1px solid var(--rule-2); padding: 8px 10px 10px; display: grid; gap: 8px; }
-.lenswrap { overflow-x: auto; }
-.lenswrap canvas { display: block; width: 100%; min-width: 620px; }
-.lens-foot { display: flex; gap: 12px; align-items: start; justify-content: space-between; flex-wrap: wrap; }
-.lens-foot .note { max-width: 80ch; }
+.lbl-box.op { pointer-events: auto; cursor: pointer; }
+.lbl-box.op span { text-decoration: underline dotted; text-underline-offset: 3px; }
+.lbl-box.op:hover span { text-decoration-style: solid; }
+
+.opview {
+  width: min(960px, calc(100vw - 24px)); max-width: none; max-height: calc(100vh - 24px); padding: 0; overflow: auto;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--ink); border-radius: var(--radius);
+  box-shadow: 0 10px 40px color-mix(in srgb, var(--ink) 25%, transparent);
+}
+.opview::backdrop { background: color-mix(in srgb, var(--paper) 55%, transparent); }
+.opv-inner { display: grid; gap: 8px; padding: 10px 14px 12px; }
+.opv-head { display: flex; justify-content: space-between; align-items: start; gap: 10px; }
+.opv-head h3 { font-size: var(--s1); font-stretch: 92%; }
+.opv-where { font-family: var(--f-mono); font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+.opv-wrap { overflow-x: auto; }
+.opv-wrap canvas { display: block; }
+.opv-note { max-width: 88ch; }
+.opv-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--rule-2); padding-top: 8px; }
+.opv-foot .btn { min-height: 32px; padding: 2px 11px; font-size: 0.82rem; }
+.opv-sp { flex: 1; }
+.opv-count { font-family: var(--f-mono); font-size: 0.72rem; color: var(--muted); min-width: 4.5em; text-align: right; }
 .sd-lens { font-size: 0.9rem; }
 .lsyms { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
 .lsym { display: grid; justify-items: center; gap: 1px; padding: 4px 0; border-radius: 2px; border: 1px solid transparent; cursor: pointer; font-family: var(--f-mono); color: var(--ink); }

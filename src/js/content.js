@@ -6,14 +6,14 @@
   // Sub-blocks drawn in the scene. lane: true spans the 8-lane stack.
   P.BOXES = [
     { x: [0, 4], name: 'MAC / RS', stage: 1 },
-    { x: [5, 9], name: '64B/66B encode', stage: 2 },
-    { x: [10.5, 14.5], name: '256B/257B transcode', stage: 2 },
+    { x: [5, 9], name: '64B/66B encode', stage: 2, view: 'b66' },
+    { x: [10.5, 14.5], name: '256B/257B transcode', stage: 2, view: 'b257' },
     { x: [16, 19], name: 'Scramble', stage: 3 },
-    { x: [20, 23], name: 'AM insertion', stage: 3 },
-    { x: [24.5, 26.5], name: 'Pre-FEC distribution', stage: 3, short: 'Pre-FEC dist.' },
-    { x: [27, 30.5], name: 'RS(544,514) encode', stage: 3, short: 'RS encode' },
-    { x: [31, 32.5], name: 'Symbol distribution', stage: 3, lane: true, short: 'Symbol dist.' },
-    { x: [44.5, 48.5], name: 'TX PMA bit-mux', stage: 5, lane: true },
+    { x: [20, 23], name: 'AM insertion', stage: 3, view: 'am' },
+    { x: [24.5, 26.5], name: 'Pre-FEC distribution', stage: 3, short: 'Pre-FEC dist.', view: 'prefec' },
+    { x: [27, 30.5], name: 'RS(544,514) encode', stage: 3, short: 'RS encode', view: 'rs' },
+    { x: [31, 32.5], name: 'Symbol distribution', stage: 3, lane: true, short: 'Symbol dist.', view: 'dist' },
+    { x: [44.5, 48.5], name: 'TX PMA bit-mux', stage: 5, lane: true, view: 'mux' },
     { x: [67.5, 70.5], name: 'RX PMA demux', stage: 7, lane: true },
     { x: [71.5, 73.5], name: 'Alignment lock', stage: 8, lane: true, short: 'AM lock' },
     { x: [74.5, 78.5], name: 'Deskew', stage: 8, lane: true },
@@ -34,7 +34,8 @@
       watch: 'Nothing here is per-lane. Lanes do not exist yet.' },
     { n: 2, side: 'TX', title: '64B/66B encode, then 256B/257B transcode', span: [4, 15.5],
       body: '<p>Every 8 bytes from 200GMII become one <b>66-bit block</b> (2-bit sync header plus 64-bit payload). The PCS then <b>transcodes</b> each group of four 66-bit blocks into one <b>257-bit block</b>: the four sync headers collapse into a 1-bit header plus a little control information, which frees room for FEC parity.</p><p>Transcoding is a lossless re-packing of the same data. It is not a second, independent line code; RX reverses it exactly.</p>',
-      watch: 'Four thin 66b slabs in, one wide 257b slab out.' },
+      watch: 'Four thin 66b slabs in, one wide 257b slab out.',
+      lens: ['b66', 'b257'] },
     { n: 3, side: 'TX', title: 'Scramble, AM insertion, RS-FEC, distribution', span: [15, 33.5],
       body: '<p>Standard order on transmit: <b>scramble</b> the 257-bit blocks, then <b>insert the alignment marker group</b>, then <b>pre-FEC distribution</b>, <b>RS(544,514) encode</b>, and <b>symbol distribution</b> onto the 8 PCS lanes.</p>' +
         '<p><b>AM insertion.</b> Rate matching deletes idles so that, once every 81,920 257-bit blocks, there is a 1028-bit hole at the start of a codeword pair. The AM group fills it: 8 lane markers of 120 bits, plus a 65-bit pad and 3 status bits. It goes in after the scrambler, so it stays recognizable, and before the encoder, so FEC protects it.</p>' +

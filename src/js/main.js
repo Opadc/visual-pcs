@@ -38,7 +38,7 @@
       if (S.u >= S.stepTo) S.stepTo = null;
     }
     P.processAms();
-    P.lensTick(dt);           // the lens sits below the viewport, so it runs even when the scene is offscreen
+    P.viewTick(dt);           // the step view is a modal, so it runs even when the scene is offscreen
     diagAcc += dt;
     if (diagAcc > 0.12) { diagAcc = 0; P.renderDiag(); }
     if (!visible || document.hidden) return;
@@ -55,7 +55,7 @@
 
   function themeChanged() {
     requestAnimationFrame(function () {
-      P.readTheme(); P.recolorStatic(); P.drawScope(); P.lensRecolor();
+      P.readTheme(); P.recolorStatic(); P.drawScope(); P.viewRecolor();
     });
   }
 
@@ -65,7 +65,7 @@
     P.initDiag();
     P.initScope();
     P.initStory();
-    P.initLens();
+    P.initViews();
     P.on(onEvent);
     try {
       P.initScene(vp);
@@ -94,7 +94,7 @@
     new MutationObserver(themeChanged).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
     new IntersectionObserver(function (es) { visible = es[0].isIntersecting; }, { rootMargin: '120px' }).observe(vp);
     if (!G.failed) requestAnimationFrame(frame);
-    else setInterval(function () { if (S.playing) { P.tick(); } P.processAms(); P.renderDiag(); P.drawScope(); S.u += 0.25 * S.speed; }, 100);
+    else setInterval(function () { if (S.playing) { P.tick(); } P.processAms(); P.renderDiag(); P.drawScope(); P.viewTick(0.1); S.u += 0.25 * S.speed; }, 100);
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', P.boot);

@@ -6,10 +6,16 @@
   var v = new T.Vector3();
   var items = [];
 
+  // Box names with a step view are clickable. Keyboard users reach the same
+  // views from the Bit lens buttons and the stage detail.
   P.initLabels = function (host) {
     G.labelHost = document.createElement('div');
     G.labelHost.className = 'scene-labels';
     G.labelHost.setAttribute('aria-hidden', 'true');
+    G.labelHost.addEventListener('click', function (e) {
+      var t = e.target.closest('[data-view]');
+      if (t) P.openView(t.dataset.view);
+    });
     host.appendChild(G.labelHost);
   };
 
@@ -41,7 +47,8 @@
     var top = 4 * P.LANE_SP + 0.4;
     P.BOXES.forEach(function (b, i) {
       var y = b.lane ? top + 0.3 : 1.6;
-      L.push({ id: 'box' + i, html: b.short || b.name, cls: 'lbl-box', pos: [(b.x[0] + b.x[1]) / 2, y, 0], pri: b.lane ? 3 : 2 });
+      L.push({ id: 'box' + i, html: b.view ? '<span data-view="' + b.view + '" title="How ' + b.name + ' works">' + (b.short || b.name) + '</span>' : b.short || b.name,
+               cls: 'lbl-box' + (b.view ? ' op' : ''), pos: [(b.x[0] + b.x[1]) / 2, y, 0], pri: b.lane ? 3 : 2 });
     });
     P.STAGES.forEach(function (st) {
       L.push({ id: 'st' + st.n, html: '<b>' + st.n + '</b>', cls: 'lbl-stage' + (S.stage === st.n ? ' on' : ''),

@@ -39,9 +39,14 @@
     });
     el.addEventListener('pointermove', function (e) {
       if (down) return;
-      var r = el.getBoundingClientRect();
-      el.style.cursor = nearest(e.clientX - r.left, e.clientY - r.top, 12) >= 0 ? 'pointer' : '';
+      var r = el.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+      var bx = boxAt(sx, sy), onBlock = blockAt(sx, sy, bx) >= 0;
+      if (onBlock) bx = null;
+      setHoverBox(bx);
+      el.style.cursor = onBlock || bx ? 'pointer' : '';
+      el.title = bx ? 'How ' + bx.def.name + ' works' : '';
     });
+    el.addEventListener('pointerleave', function () { setHoverBox(null); });
 
     card.addEventListener('click', function (e) {
       var b = e.target.closest('[data-act]');
@@ -72,14 +77,38 @@
     return best;
   }
 
-  function pickAt(sx, sy) {
+  // Stage box under the pointer that has a step view, or null.
+  function boxAt(sx, sy) {
+    ndc.set(sx / G.w * 2 - 1, -(sy / G.h) * 2 + 1);
+    ray.setFromCamera(ndc, G.camera);
+    var hit = ray.intersectObjects(G.boxes.filter(function (b) { return b.def.view; }).map(function (b) { return b.mesh; }), false)[0];
+    return hit ? G.boxes.find(function (b) { return b.mesh === hit.object; }) : null;
+  }
+
+  // A block wins over the box around it; the box opens its step view. Inside
+  // such a box the near-miss radius for blocks shrinks, or the box could never be hit.
+  function blockAt(sx, sy, bx) {
     ndc.set(sx / G.w * 2 - 1, -(sy / G.h) * 2 + 1);
     ray.setFromCamera(ndc, G.camera);
     var hit = ray.intersectObject(G.inst, false)[0];
-    var i = hit && hit.instanceId != null && hit.instanceId < P.packetCount() ? hit.instanceId : nearest(sx, sy, 16);
-    if (i < 0) { P.closeInspector(); return; }
-    open(P.packetMeta(i));
+    return hit && hit.instanceId != null && hit.instanceId < P.packetCount() ? hit.instanceId : nearest(sx, sy, bx ? 5 : 16);
   }
+  function pickAt(sx, sy) {
+    var bx = boxAt(sx, sy), i = blockAt(sx, sy, bx);
+    if (i >= 0) { open(P.packetMeta(i)); return; }
+    if (bx) { P.closeInspector(); P.openView(bx.def.view); return; }
+    P.closeInspector();
+  }
+
+  // Hovered stage box: its edges go dark so it reads as clickable.
+  var hoverBox = null;
+  function setHoverBox(b) {
+    if (b === hoverBox) return;
+    if (hoverBox) hoverBox.edges.material.color.copy(G.col.edge);
+    hoverBox = b;
+    if (b) b.edges.material.color.copy(G.col.ink);
+  }
+  P.resetBoxHover = function () { hoverBox = null; };
 
   // Keyboard: inspect the block nearest the centre of the view.
   P.inspectCenter = function () {
@@ -207,7 +236,7 @@
     d.symbols.forEach(function (s, n) {
       var cls = s.parity ? ' par' : s.parts.some(function (pt) { return pt.kind === 'am'; }) ? ' am' : '';
       h += '<button type="button" class="lsym ' + (s.w ? 'b' : 'a') + cls + (n === symSel ? ' on' : '') + '" data-act="sym" data-i="' + n + '">' +
-        '<b>' + (s.w ? 'B' : 'A') + s.i + '</b><i>' + (s.parity ? 'parity' : s.hex) + '</i></button>';
+        '<b>' + (s.w ? 'B' : 'A') + s.i + '</b><i>' + s.hex + '</i></button>';
     });
     h += '</div>';
     if (symSel >= 0) h += symbolLine(d.symbols[symSel]);
@@ -219,7 +248,9 @@
   }
 
   function symbolLine(s) {
-    if (s.parity) return '<p class="ins-note">' + (s.w ? 'B' : 'A') + s.i + ' is parity symbol ' + (s.p + 1) + ' of 30. The RS(544,514) encoder computes it from the 514 message symbols. It carries no text.</p>';
+    if (s.parity) return '<div class="ins-sym"><span class="symhex">' + (s.w ? 'B' : 'A') + s.i + ' = ' + s.hex + '</span><span class="symbin" title="bit 0 first">' + s.bits + '</span></div>' +
+      '<p class="ins-note">Parity symbol ' + (s.p + 1) + ' of 30. The RS(544,514) encoder computes it from the 514 message symbols, so it carries no text. ' +
+      'The lab computes it over the unscrambled bits it shows; on a real link the values differ.</p>';
     var bits = '', legend = [];
     s.parts.forEach(function (pt, k) {
       bits += '<span class="sb c' + (k % 3) + '">' + pt.bits + '</span>';
@@ -294,7 +325,7 @@
       h += '<div class="syms">' + d.symbols.map(function (s, i) {
         var am = !s.parity && s.parts.some(function (pt) { return pt.kind === 'am' || pt.kind === 'pad' || pt.kind === 'sf'; });
         return '<button type="button" class="sym' + (s.parity ? ' par' : am ? ' am' : '') + (i === symSel ? ' on' : '') + '" data-act="sym" data-i="' + i + '" title="' + (d.w ? 'B' : 'A') + s.i + '">' +
-          (s.parity ? 'P' : s.hex) + '</button>';
+          s.hex + '</button>';
       }).join('') + '</div>';
       if (symSel >= 0) h += symbolLine(d.symbols[symSel]);
       else if (d.sources.length) h += '<p class="ins-src">Holds bits of: <span class="ins-ascii sm">' + text(d.sources[0], d.sources[d.sources.length - 1] - d.sources[0] + 1) + '</span> Click a symbol to see which bits.</p>';

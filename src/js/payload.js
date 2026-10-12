@@ -121,10 +121,24 @@
 
   // Codeword symbol i (0 = sent first) of codeword w (0 = A, 1 = B) in pair q.
   P.cwSymbol = function (q, w, i) {
-    if (i >= P.CW_K) return { q: q, w: w, i: i, parity: true, p: i - P.CW_K };
+    if (i >= P.CW_K) {
+      var v = P.cwParity(q, w)[i - P.CW_K], bits = '';
+      for (var n = 0; n < 10; n++) bits += (v >> n) & 1;
+      return { q: q, w: w, i: i, parity: true, p: i - P.CW_K, value: v, bits: bits };
+    }
     var s = tenBits(q, 20 * i + 10 * w);
     s.q = q; s.w = w; s.i = i; s.parity = false;
     return s;
+  };
+  // The 30 RS(544,514) parity symbols of codeword w in pair q. Computed over the
+  // bits this model shows; a real link scrambles them first (119.2.4.6), so the
+  // values on the wire differ.
+  P.cwParity = function (q, w) {
+    return cached('p' + q + ':' + w, function () {
+      var msg = [];
+      for (var i = 0; i < P.CW_K; i++) msg.push(tenBits(q, 20 * i + 10 * w).value);
+      return P.rsParity(msg);
+    });
   };
 
   // Lane symbol k (0..135) of PCS lane p in pair q -> codeword symbol.
