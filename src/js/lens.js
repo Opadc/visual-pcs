@@ -39,17 +39,20 @@
       at: function () { return { t: nextData66(Math.round((S.u - boxMid('b66')) / U66), 1) }; },
       nav: function (c, d) { return { t: nextData66(c.t + d, d) }; },
       where: function (c) { var b = P.slot66(c.t).block; return '200GMII transfer ' + b + ' → 66-bit block ' + b; } },
-    b257: { title: '256B/257B transcode', stage: 2, steps: 5, rate: 2.5, h: 340,
+    b257: { title: '256B/257B transcode', stage: 2, steps: 5, rate: 2.5, h: 316,
       at: function () { return { s: nextData257(Math.round((S.u - boxMid('b257')) / U257), 1) }; },
       nav: function (c, d) { return { s: nextData257(c.s + d, d) }; },
       where: function (c) {
         var sl = P.slot257(c.s);
         return '66-bit blocks ' + 4 * sl.block + '–' + (4 * sl.block + 3) + ' → 257-bit block ' + sl.block + ' (slot ' + (sl.r + 1) + ' of 40, pair ' + sl.q + ')';
       } },
-    am: { title: 'AM insertion', stage: 3, steps: 40, rate: 8, h: 250,
+    am: { title: 'AM insertion', stage: 3, steps: 0, rate: 6, h: 448,   // steps: AM_STEPS, set below
       at: function () { var q = pairAt(boxMid('am')).q; return { q: q - mod(q, P.AM_PAIRS) }; },
       nav: function (c, d) { return { q: c.q + d * P.AM_PAIRS }; },
-      where: function (c) { return 'Codeword pair ' + c.q + ': the AM group fills slots 1–4 of 40'; } },
+      where: function (c) {
+        var b = P.slot257(c.q * P.PAIR_SLOTS + P.AM_SLOTS).block;
+        return 'AM insertion ' + c.q / P.AM_PAIRS + ': 4 AM blocks, then 257-bit blocks ' + b + '–' + (b + 2 * P.PAIR_SLOTS - P.AM_SLOTS - 1) + ' in slots 4–79';
+      } },
     prefec: { title: 'Pre-FEC distribution', stage: 3, steps: 16, rate: 4, h: 360,
       at: function () {
         var p = pairAt(boxMid('prefec')), j = Math.floor(p.f * 1028) - 8;
@@ -82,14 +85,19 @@
   };
   P.VIEWS = VIEWS;
 
+  // 257-bit blocks from one AM group to the next: standard and lab.
+  var AM_STD = P.AM_PAIRS_STD * P.PAIR_SLOTS, AM_LAB = P.AM_PAIRS * P.PAIR_SLOTS;
+  function num(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
   // Caption under each view, in words.
   var NOTES = {
     b66: 'Every 200GMII transfer of 8 data bytes becomes one 66-bit block: a 2-bit sync header, then the same 64 bits unchanged. ' +
       'Header 01 means all 8 bytes are data; 10 would mean the block carries control characters, which this model leaves out. Bit 0 of each byte is sent first.',
     b257: 'Four 66-bit blocks become one 257-bit block. When all four are data, their four 2-bit sync headers (8 bits) are replaced by a single header bit 1, ' +
       'and the four 64-bit payloads follow in order, unchanged: 4 × 66 = 264 bits become 257. The 7 bits saved per block make room for RS-FEC parity at the same line rate.',
-    am: 'The 257-bit stream with one AM group. Rate matching has already deleted idles, leaving 4 empty slots at the start of the codeword pair. ' +
-      'The 8 lane markers, interleaved 10 bits at a time, fill exactly that space. The standard inserts a group every 81,920 blocks (2,048 codeword pairs); the lab does it every pair.',
+    am: 'As in IEEE 802.3 Figure 119–6, the PCS inserts 4 AM blocks (am_mapped, 4 × 257 = 1028 bits) once every ' + num(AM_STD) + ' × 257-bit blocks, ' +
+      'so ' + num(AM_STD - P.AM_SLOTS) + ' blocks of data pass between one group and the next. Rate matching has already deleted idles to leave the 4-block gap; ' +
+      'the 8 lane markers, interleaved 10 bits at a time, plus a pad and status field fill it exactly. The lab inserts a group every ' + AM_LAB + ' blocks so markers keep passing on screen.',
     prefec: 'The 10,280-bit block is read as 1028 ten-bit symbols, in order, and dealt alternately: stream symbol 2i goes to codeword A as A_i, symbol 2i+1 to codeword B as B_i. ' +
       'Nothing is changed or reordered within a symbol. Symbols ignore character boundaries, so most characters end up split between A and B.',
     rs: 'RS(544,514) is systematic: the 514 message symbols of each codeword pass through unchanged, and the encoder appends 30 new parity symbols computed from them ' +
@@ -205,47 +213,67 @@
     label('bit 0 → bit 65', x0, ys + 30, th.muted, 10);
   }
 
-  /* ---- 256B/257B: four 66-bit blocks in, one 257-bit block out ---- */
+  /* ---- 256B/257B, laid out like the transcoder figure (Example 1: all data
+     blocks): tx_coded_0..3 end to end on top, tx_xcoded below. Each 01 header
+     collapses to a boundary, so d_0..d_3 sit directly under their source. ---- */
+  function payload(x, y, w, h, start, ghost, fade) {
+    var bw = w / 8;
+    for (var b = 0; b < 8; b++) {
+      var c = P.byteAt(start + b), f = b & 1 ? th.byte1 : th.byte0, bx = x + b * bw;
+      if (ghost) { box(bx + 0.5, y, bw - 1, h, null, th.rule); continue; }
+      if (fade) f = mix(f, th.paper, 0.55);
+      box(bx + 0.5, y, bw - 1, h, f);
+      var tc = onFill(f), hx = fit([P.hex(c, 2)], bw - 1, 9);
+      label(glyph(c), bx + bw / 2, y + h * 0.36, tc, 13, 'center', 600);
+      if (hx) label(hx, bx + bw / 2, y + h * 0.74, tc, 9, 'center');
+    }
+  }
+  function dash(x0, y0, x1, y1) {
+    ctx.strokeStyle = th.muted; ctx.lineWidth = 1; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.setLineDash([]);
+  }
   function drawB257(W) {
     var sl = P.slot257(cur.s), start = 32 * sl.block, k = step, h = hot();
-    var mid = W / 2, x0 = 70, hw = 30, rh = 40, gap = 6, y0 = 44;
-    var lw = (mid - 26 - x0 - hw - 4) / 8, rx = mid + 26, rw = (W - 16 - rx - hw - 4) / 8;
-    label('in: 4 × 66-bit blocks', x0, 18, th.ink, 11, 'left', 600);
-    label('out: 1 × 257-bit block', rx, 18, th.ink, 11, 'left', 600);
+    var x0 = 76, H2 = 26, H1 = 16, rh = 44, yT = 62, yB = 196, xR = W - 16;
+    var dw = (xR - x0 - 4 * H2) / 4, bw = H2 + dw;
+    function dx(g) { return x0 + g * bw + H2; }     // where d_g starts in tx_coded_g
+    var xB = xR - H1 - 4 * dw;                      // tx_xcoded is packed and ends with tx_coded_3
+    function bx(g) { return xB + H1 + g * dw; }     // where d_g starts in tx_xcoded
+    label('in', 8, yT + rh / 2 - 7, th.ink, 11, 'left', 700);
+    label('4 × 66 bits', 8, yT + rh / 2 + 8, th.muted, 9);
+    label('out', 8, yB + rh / 2 - 7, th.ink, 11, 'left', 700);
+    label('257 bits', 8, yB + rh / 2 + 8, th.muted, 9);
     for (var g = 0; g < 4; g++) {
-      var y = y0 + g * (rh + gap), moved = k >= g + 2;
-      label('#' + (4 * sl.block + g), 8, y + rh / 2, th.muted, 10);
-      // Left: the 66-bit block, its header dropped once transcoding starts.
-      hdrTile(x0, y, hw, rh, '01', '', false);
-      if (k >= 1) {
-        ctx.fillStyle = th.paper; ctx.globalAlpha = 0.65; ctx.fillRect(x0, y, hw, rh); ctx.globalAlpha = 1;
-        ctx.strokeStyle = th.bad; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x0 + 3, y + rh - 3); ctx.lineTo(x0 + hw - 3, y + 3); ctx.stroke();
-      }
-      for (var b = 0; b < 8; b++) {
-        var c = P.byteAt(start + 8 * g + b), f = b & 1 ? th.byte1 : th.byte0;
-        byteTile(x0 + hw + 4 + b * lw + 0.5, y, lw - 1, rh, c, moved && stepping ? mix(f, th.paper, 0.55) : f, false);
-        byteTile(rx + hw + 4 + b * rw + 0.5, y, rw - 1, rh, c, f, !moved);
-      }
-      if (h === g + 1) { box(x0 + hw + 4, y, 8 * lw, rh, null, th.ink, 2); box(rx + hw + 4, y, 8 * rw, rh, null, th.ink, 2); }
+      var xb = x0 + g * bw, xd = dx(g), placed = k >= g + 2, src = start + 8 * g;
+      label('tx_coded_' + g, xb + bw / 2, yT - 36, th.ink, 11, 'center', 600);
+      label('66-bit block ' + (4 * sl.block + g), xb + bw / 2, yT - 22, th.muted, 9, 'center');
+      label('0', xb + 2, yT - 8, th.muted, 9);
+      label('2', xd + 2, yT - 8, th.muted, 9);
+      label('65', xb + bw - 2, yT - 8, th.muted, 9, 'right');
+      hdrTile(xb, yT, H2, rh, '01', '', false);
+      payload(xd, yT, dw, rh, src, false, placed && stepping);
+      box(xb, yT, bw, rh, null, th.ink);
+      // Output: d_g unchanged, packed right after d_(g-1).
+      var xo = bx(g);
+      payload(xo, yB, dw, rh, src, !placed, false);
+      if (placed && g > 0) { ctx.fillStyle = th.ink; ctx.fillRect(xo - 0.75, yB, 1.5, rh); }
+      label('d_' + g, (xd + xo) / 2 + dw / 2, (yT + rh + yB) / 2, placed ? th.ink : th.muted, 11, 'center', 600);
+      // Both edges of a 01 header meet at one boundary below: its 2 bits are gone.
+      if (k >= 1 && g === 0) dash(xd, yT + rh, xo, yB);
+      if (placed && g > 0) { dash(xb, yT + rh, xo, yB); dash(xd, yT + rh, xo, yB); }
+      if (placed && g === 3) dash(xR, yT + rh, xR, yB);
+      if (h === 0) box(xb - 1, yT - 1, H2 + 2, rh + 2, null, th.am, 2);
+      if (h === g + 1) { box(xd - 1, yT - 1, dw + 2, rh + 2, null, th.ink, 2); box(xo - 1, yB - 1, dw + 2, rh + 2, null, th.ink, 2); }
     }
-    var hH = 4 * rh + 3 * gap;
-    hdrTile(rx, y0, hw, hH, '1', 'hdr', k < 1);
-    if (h === 0) box(rx, y0, hw, hH, null, th.am, 3);
-    arrow(mid - 18, mid + 18, y0 + hH / 2);
-    var yb = y0 + hH + 14;
-    label('4 × (2 + 64) = 264 bits', x0, yb, th.muted, 10);
-    label('1 + 4 × 64 = 257 bits', rx, yb, th.muted, 10);
-    label(k >= 1 ? 'the four 01 headers are dropped; one header bit 1 says “all four are data”' : 'each 66-bit block starts with sync header 01',
-      x0, yb + 18, k >= 1 ? th.ink : th.muted, 10, 'left', k >= 1 ? 600 : 500);
-    // The 257 bits in the order they are sent.
-    var ys = yb + 50, cw = (W - x0 - 16) / 257;
-    label('the 257 bits in the order they are sent', x0, ys - 10, th.muted, 10);
-    box(x0, ys, Math.max(cw, 3), 16, k >= 1 ? th.ink : null, k >= 1 ? null : th.rule);
-    for (var g2 = 0; g2 < 4; g2++) {
-      var gx = x0 + (1 + 64 * g2) * cw, on = k >= g2 + 2;
-      for (var b2 = 0; b2 < 8; b2++) box(gx + 8 * b2 * cw, ys, 8 * cw - 0.5, 16, on ? (b2 & 1 ? th.byte1 : th.byte0) : null, on ? null : th.rule);
-      label('block ' + (4 * sl.block + g2) + ' payload', gx + 32 * cw, ys + 28, on ? th.ink2 : th.muted, 9, 'center');
-    }
+    hdrTile(xB, yB, H1, rh, '1', '', k < 1);
+    box(xB, yB, xR - xB, rh, null, th.ink);
+    if (h === 0) box(xB - 1, yB - 1, H1 + 2, rh + 2, null, th.am, 3);
+    label('0', xB + 2, yB + rh + 10, th.muted, 9);
+    label('256', xR - 2, yB + rh + 10, th.muted, 9, 'right');
+    label('tx_xcoded · 257-bit block ' + sl.block, (xB + xR) / 2, yB + rh + 14, th.ink, 11, 'center', 600);
+    var yc = yB + rh + 42;
+    label('all four blocks are data (01), so the four sync headers become one header bit 1', x0, yc, th.ink, 10, 'left', 600);
+    label('d_0…d_3 are copied unchanged: 4 × 66 = 264 bits in, 1 + 4 × 64 = 257 bits out', x0, yc + 18, th.muted, 10);
   }
 
   /* ---- pre-FEC distribution: the stream on the left, m_A over m_B on the right ---- */
@@ -414,34 +442,123 @@
   }
 
   /* ---- AM insertion and PMA bit-mux ---- */
-  // 40 slots of one codeword pair. Before: 4 idle slots then 36 blocks. The
-  // group falls into the gap as the cursor reaches it.
+  /* ---- AM insertion. On top, Figure 119-6 as a progress bar of three
+     81,920-block periods: the second half of chunk 0, then chunks 1 and 2,
+     each opened by its 4 AM blocks. Step / Animate fill it in arrival order.
+     Below, chunk 1's group falling into the 4-block gap rate matching left. ---- */
+  var AM_DATA = 20, AM_HALF = AM_DATA / 2, AM_CHUNK = P.AM_SLOTS + AM_DATA;   // steps per chunk
+  var AM_STEPS = AM_HALF + 2 * AM_CHUNK;
+  VIEWS.am.steps = AM_STEPS;
+  // Blocks of chunk c (0..2) that have arrived after step k.
+  function amFill(c, k) {
+    if (c === 0) return Math.round(AM_STD * (AM_HALF + Math.min(AM_HALF, k)) / AM_DATA);
+    var t = k - AM_HALF - (c - 1) * AM_CHUNK;
+    if (t <= 0) return 0;
+    if (t <= P.AM_SLOTS) return t;
+    return P.AM_SLOTS + Math.round((AM_STD - P.AM_SLOTS) * Math.min(AM_DATA, t - P.AM_SLOTS) / AM_DATA);
+  }
+  function amLive(k) {
+    if (k <= AM_HALF) return 0;
+    return k <= AM_HALF + AM_CHUNK ? 1 : 2;
+  }
+  function amStatus(k) {
+    var c = amLive(k), n = amFill(c, k);
+    if (c === 0) return 'chunk 0: 257-bit data blocks arriving, ' + num(n) + ' of ' + num(AM_STD);
+    if (n <= P.AM_SLOTS) return 'chunk ' + (c - 1) + ' is full. Chunk ' + c + ' starts with AM block ' + n + ' of 4';
+    if (n < AM_STD) return 'chunk ' + c + ': AM group in, data blocks arriving, ' + num(n - P.AM_SLOTS) + ' of ' + num(AM_STD - P.AM_SLOTS);
+    return 'chunk ' + c + ' is full: ' + num(AM_STD) + ' blocks. The next chunk starts with its own 4 AM blocks';
+  }
+  // Step of the close-up below, driven by chunk 1: AM blocks one at a time,
+  // then its first 36 data blocks with the first data step.
+  function amDetail(k) {
+    var n = amFill(1, k);
+    return n <= P.AM_SLOTS ? n : Math.min(2 * P.PAIR_SLOTS, P.AM_SLOTS + Math.round((n - P.AM_SLOTS) * AM_DATA * (P.PAIR_SLOTS - P.AM_SLOTS) / (AM_STD - P.AM_SLOTS)));
+  }
+  function amPeriod(W, k) {
+    var x0 = 70, xR = W - 16, y = 44, h = 22, gap = 6, live = amLive(k);
+    var cw = (xR - x0 - 2 * gap) / 2.5, aw = Math.max(40, Math.min(56, cw * 0.14));
+    var xs = [x0, x0 + cw / 2 + gap, x0 + 1.5 * cw + 2 * gap], ws = [cw / 2, cw, cw];
+    var full = mix(th.edge, th.paper, 0.15), empty = mix(th.edge, th.paper, 0.85), amEmpty = mix(th.am, th.paper, 0.75);
+    label('802.3 Figure 119–6: 4 AM blocks inserted every ' + num(AM_STD) + ' × 257-bit blocks', x0, 12, th.ink, 11, 'left', 600);
+    for (var c = 0; c < 3; c++) {
+      var x = xs[c], w = ws[c], n = amFill(c, k), a = c ? aw : 0, dx = x + a, dw = w - a, head = x;
+      // Chunk 0 shows only its second half; the first half has already passed.
+      var d = c ? Math.max(0, n - P.AM_SLOTS) : n - AM_STD / 2, dmax = c ? AM_STD - P.AM_SLOTS : AM_STD / 2;
+      box(dx + 1, y, dw - 1, h, empty);
+      if (d > 0) { box(dx + 1, y, (dw - 1) * d / dmax, h, full); head = dx + 1 + (dw - 1) * d / dmax; }
+      if (c) {
+        var sw = a / P.AM_SLOTS;
+        for (var s = 0; s < P.AM_SLOTS; s++) box(x + s * sw, y, sw - 1, h, s < n ? th.am : amEmpty);
+        if (n > 0 && n <= P.AM_SLOTS) head = x + n * sw;
+        if (aw >= 40) label('AM', x + a / 2, y + h / 2, onFill(th.am), 9, 'center', 700);
+      } else {
+        label('ooo', x + 14, y + h / 2, onFill(full), 9, 'center');
+      }
+      if (c === 1) box(x - 2, y - 2, a + 3, h + 4, null, th.ink, 1.5);   // the group shown close up below
+      var on = c === live && stepping && step < AM_STEPS;
+      if (on) {
+        ctx.fillStyle = th.ink; ctx.beginPath();
+        ctx.moveTo(head, y + h + 2); ctx.lineTo(head - 5, y + h + 9); ctx.lineTo(head + 5, y + h + 9); ctx.closePath(); ctx.fill();
+      }
+      var name = c ? 'chunk ' + c : 'chunk 0 (second half)';
+      label(fit([name + '  ' + num(n) + ' / ' + num(AM_STD), name], w, 10, 600), x, y - 10, c === live ? th.ink : th.muted, 10, 'left', c === live ? 700 : 500);
+      if (!c) continue;
+      // Dimension line under each full period.
+      var yd = y + h + 18;
+      ctx.strokeStyle = th.muted; ctx.lineWidth = 1; ctx.beginPath();
+      ctx.moveTo(x + 0.5, yd - 4); ctx.lineTo(x + 0.5, yd + 4);
+      ctx.moveTo(x + w - 0.5, yd - 4); ctx.lineTo(x + w - 0.5, yd + 4);
+      ctx.moveTo(x, yd); ctx.lineTo(x + w, yd); ctx.stroke();
+      var txt = fit(['4 AM + ' + num(AM_STD - P.AM_SLOTS) + ' data = ' + num(AM_STD) + ' blocks', num(AM_STD) + ' blocks'], w - 16, 10);
+      ctx.font = font(10); var tw = ctx.measureText(txt).width + 10;
+      box(x + w / 2 - tw / 2, yd - 7, tw, 14, th.paper);
+      label(txt, x + w / 2, yd, th.muted, 10, 'center');
+    }
+    label(amStatus(k), x0, y + h + 40, th.ink, 11, 'left', 600);
+    label('below: chunk 1’s AM insertion (outlined) close up. The lab’s 3D view repeats every ' + AM_LAB + ' blocks so markers stay on screen.', x0, y + h + 58, th.muted, 10);
+  }
+
   function drawAm(W) {
-    var q = cur.q, x0 = 70, sw = (W - x0 - 16) / 40, y1 = 52, y2 = 150, hh = 34, k = step;
+    amPeriod(W, step);
+    var q = cur.q, x0 = 70, sw = (W - x0 - 16) / 40, hh = 34, k = amDetail(step);
+    // Each side is two rows of 40: slots 0-39, then the 40 regular blocks of slots 40-79.
+    var y1 = 160, y1n = y1 + hh + 20, y2 = 300, y2n = y2 + hh + 8;
+    var b0 = P.slot257(q * 40 + P.AM_SLOTS).block + P.PAIR_SLOTS - P.AM_SLOTS;
     label('before', 8, y1 + hh / 2, th.muted, 11);
     label('after', 8, y2 + hh / 2, th.muted, 11);
+    function tile(x, y, b) { box(x + 1, y, sw - 2, hh, th.edge); if (sw > 18) label(String(b), x + sw / 2, y + hh / 2, th.paper, 9, 'center'); }
+    // Slot numbers only under the before rows; the number inside a tile is the 257-bit block.
+    [y1, y1n].forEach(function (y, r) {
+      label('slot', 8, y + hh + 9, th.muted, 9);
+      if (sw > 12) for (var s = 0; s < 40; s++) label(String(40 * r + s), x0 + s * sw + sw / 2, y + hh + 9, th.muted, 9, 'center');
+    });
+    for (var i = 0; i < 40; i++) {
+      var xi = x0 + i * sw;
+      tile(xi, y1n, b0 + i);
+      if (40 + i < k) tile(xi, y2n, b0 + i); else box(xi + 1, y2n, sw - 2, hh, null, th.rule);
+    }
     for (var s = 0; s < 40; s++) {
       var x = x0 + s * sw, sl = P.slot257(q * 40 + s);
       if (sl.am) box(x + 1, y1, sw - 2, hh, null, th.rule);
-      else { box(x + 1, y1, sw - 2, hh, th.edge); if (sw > 18) label(String(sl.block), x + sw / 2, y1 + hh / 2, th.paper, 9, 'center'); }
-      if (s >= k && sl.am) continue;
-      if (sl.am) {
-        if (s !== 0) continue;
-        var fall = Math.min(1, k / 4), gy = y1 + (y2 - y1) * fall, bw = (4 * sw - 2) / 103;
-        for (var n = 0; n < 96; n++) {
-          var t = n >> 3, r = n & 7, j = r >> 1, lane = (t % 2 === 0) === ((r & 1) === 0) ? 2 * j : 2 * j + 1;
-          box(x0 + 1 + n * bw, gy, bw + 0.3, hh, th.lanes[lane]);
-        }
-        box(x0 + 1 + 96 * bw, gy, 7 * bw, hh, th.am);
-        label('am_mapped<1027:0>', x0 + 2 * sw, gy - 9, th.ink, 10, 'center', 600);
-      } else if (s < k) {
-        box(x + 1, y2, sw - 2, hh, th.edge);
-        if (sw > 18) label(String(sl.block), x + sw / 2, y2 + hh / 2, th.paper, 9, 'center');
-      } else box(x + 1, y2, sw - 2, hh, null, th.rule);
+      else tile(x, y1, sl.block);
+      if (sl.am) continue;
+      if (s < k) tile(x, y2, sl.block); else box(x + 1, y2, sw - 2, hh, null, th.rule);
     }
-    label('4 idle-sized slots (1028 bits) are left empty by rate matching', x0, y1 - 14, th.muted, 10);
-    label('10280 bits = 1028-bit AM group + 36 × 257-bit blocks', x0, y2 + hh + 22, th.ink, 11, 'left', 600);
-    label('colours = which lane’s marker each 10 bits belong to', x0, y2 + hh + 40, th.muted, 10);
+    // The AM group falls from the gap in the before row into the after row.
+    for (var a = 0; a < P.AM_SLOTS; a++) if (a >= k) box(x0 + a * sw + 1, y2, sw - 2, hh, null, th.rule);
+    if (k > 0) {
+      var fall = Math.min(1, k / 4), gy = y1 + (y2 - y1) * fall, bw = (4 * sw - 2) / 103;
+      for (var n = 0; n < 96; n++) {
+        var t = n >> 3, r = n & 7, j = r >> 1, lane = (t % 2 === 0) === ((r & 1) === 0) ? 2 * j : 2 * j + 1;
+        box(x0 + 1 + n * bw, gy, bw + 0.3, hh, th.lanes[lane]);
+      }
+      box(x0 + 1 + 96 * bw, gy, 7 * bw, hh, th.am);
+      label('am_mapped<1027:0>', x0 + 2 * sw, gy - 9, th.ink, 10, 'center', 600);
+    }
+    label('rate matching has left 4 block slots (1028 bits) empty', x0, y1 - 12, th.muted, 10);
+    label('4 AM blocks (1028 bits), then the 257-bit blocks resume', x0, y2n + hh + 22, th.ink, 11, 'left', 600);
+    label('slots 40–79: 40 regular 257-bit blocks, no AM until 81,920 blocks after this group', x0, y2n + hh + 40, th.muted, 10);
+    label('colours = which lane’s marker each 10 bits belong to · number in a tile = 257-bit block', x0, y2n + hh + 56, th.muted, 10);
   }
 
   // The PCS lanes of one SerDes lane, bit by bit.

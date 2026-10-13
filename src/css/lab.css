@@ -180,6 +180,11 @@ input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offs
 .cells { display: flex; flex-wrap: wrap; gap: 3px; }
 .cells .grp { display: inline-flex; gap: 3px; padding-right: 5px; border-right: 1px dashed var(--rule); }
 .cells .grp:last-child { border-right: 0; }
+.cells.b257 { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 4px; }
+.cells.b257 .hdr { grid-row: 1 / span 4; align-content: center; }
+.cells.b257 .grp { display: grid; grid-template-columns: 2rem repeat(8, minmax(0, 1fr)); gap: 3px; padding: 0; border: 0; align-items: center; }
+.cells.b257 .grp .cell { min-width: 0; }
+.gnum { font-family: var(--f-mono); font-size: 0.6rem; color: var(--muted); text-align: right; padding-right: 2px; }
 .cell { display: inline-grid; justify-items: center; min-width: 1.75rem; padding: 2px 3px; border-radius: 2px; background: var(--rule-2); font-family: var(--f-mono); }
 .cell b { font-size: 0.86rem; font-weight: 600; line-height: 1.2; }
 .cell i { font-style: normal; font-size: 0.62rem; color: var(--muted); }

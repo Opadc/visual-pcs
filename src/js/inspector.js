@@ -309,8 +309,12 @@
       h += '<p class="ins-note">Idle characters between frames. Rate matching deletes enough of them to leave room for the 1028-bit AM group, ' +
         'so the data rate does not change when markers are added.</p>';
     } else if (d.kind === 'b257') {
-      h += '<p class="ins-ascii">' + text(d.start, 32) + '</p><div class="cells wrap"><span class="cell hdr"><b>1</b><i>hdr</i></span>' +
-        [0, 1, 2, 3].map(function (g) { return '<span class="grp">' + cells(d.start + g * 8, 8, d.scrambled ? 'scr' : '') + '</span>'; }).join('') + '</div>';
+      // The 1-bit header spans all four payloads; each payload is one row, so they line up.
+      h += '<p class="ins-ascii">' + text(d.start, 32) + '</p><div class="cells b257"><span class="cell hdr"><b>1</b><i>hdr</i></span>' +
+        [0, 1, 2, 3].map(function (g) {
+          return '<span class="grp"><span class="gnum" title="from 66-bit block ' + (d.from66[0] + g) + '">' + (d.from66[0] + g) + '</span>' +
+            cells(d.start + g * 8, 8, d.scrambled ? 'scr' : '') + '</span>';
+        }).join('') + '</div>';
       h += '<p class="ins-note">Four 66-bit blocks (' + d.from66[0] + '–' + d.from66[1] + ') packed into one: their four 2-bit headers become a single 1. ' +
         'Slot ' + (d.slot + 1) + ' of 40 in codeword pair ' + d.pair + '. ' +
         (d.scrambled ? 'This block is <b>scrambled</b>. On the wire the bits look random; the text is shown unscrambled so you can follow it.' : '') + '</p>';
