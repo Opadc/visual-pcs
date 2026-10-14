@@ -244,6 +244,20 @@ input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offs
 .lsym.par i { color: var(--paper); }
 .lsym.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .sym.am { background: color-mix(in srgb, var(--am) 35%, var(--panel)); }
+.opv-pick { display: grid; gap: 6px; border-top: 1px solid var(--rule-2); padding-top: 8px; }
+.opv-pick .pk-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.opv-pick .pk-head b { font-size: 0.86rem; }
+.opv-pick .pk-head .btn { min-height: 28px; padding: 2px 9px; font-size: 0.78rem; }
+.opv-pick .pk-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.opv-pick .pk-cols > div { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.pk-lab { font-family: var(--f-mono); font-size: 0.68rem; letter-spacing: 0.04em; color: var(--muted); }
+.pk-eq { font-family: var(--f-mono); font-size: 0.72rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.pk-txt { font-family: var(--f-mono); font-size: 0.86rem; font-weight: 600; letter-spacing: 0.03em; word-break: break-all; }
+.pk-empty { font-size: 0.8rem; color: var(--muted); border: 1px dashed var(--rule); border-radius: 2px; padding: 6px 8px; }
+.ambits { font-family: var(--f-mono); font-size: 0.66rem; line-height: 1.5; overflow-wrap: anywhere; }
+.ambits span { padding: 0 1px; border-radius: 2px; color: var(--paper); background: var(--lc, var(--am)); }
+.ambits .pad { background: color-mix(in srgb, var(--am) 55%, var(--panel)); color: var(--ink); }
+.ambits .sf { background: var(--ink); }
 .amgrid { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; }
 .ams { font-family: var(--f-mono); font-size: 0.62rem; font-weight: 700; text-align: center; line-height: 16px; border-radius: 2px; color: var(--paper); background: var(--lc); }
 
@@ -658,6 +672,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
         <button type="button" class="ins-x" data-act="close" aria-label="Close">×</button>
       </header>
       <div class="opv-wrap" id="opv-wrap"><canvas id="opv-canvas" role="img"></canvas></div>
+      <div class="opv-pick" id="opv-pick" hidden aria-live="polite"></div>
       <p class="note opv-note" id="opv-note"></p>
       <footer class="opv-foot">
         <button type="button" class="btn" data-act="prev" id="opv-prev" title="The unit before this one (←)">← Prev</button>
@@ -2866,6 +2881,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 (function (P) {
   'use strict';
   var S = P.state, dlg, cv, ctx, dpr = 1, mode = null, cur = null;
+  var pick = -1;   // AM view: the clicked slot 0-79, or -1
   var step = 0, acc = 0, anim = false, stepping = false, dirty = true;
   var UPAIR = P.UNITS_PER_PAIR * P.GAP, U257 = UPAIR / P.PAIR_SLOTS, U66 = U257 / 4;
 
@@ -3369,12 +3385,34 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     label('below: chunk 1’s AM insertion (outlined) close up. The lab’s 3D view repeats every ' + AM_LAB + ' blocks so markers stay on screen.', x0, y + h + 58, th.muted, 10);
   }
 
+  // Tile layout of the AM close-up, shared by drawing and click hit-testing.
+  // Each side is two rows of 40: slots 0-39, then the 40 regular blocks of slots 40-79.
+  function amGeo(W) {
+    var x0 = 70, hh = 34, y1 = 160, y2 = 300;
+    return { x0: x0, sw: (W - x0 - 16) / 40, hh: hh, rows: [[y1, y1 + hh + 20], [y2, y2 + hh + 8]] };
+  }
+  // Slot (0-79) under canvas point (x, y), or -1.
+  function amHit(x, y) {
+    var g = amGeo(cv.width / dpr), s = Math.floor((x - g.x0) / g.sw);
+    if (s < 0 || s >= 40) return -1;
+    for (var side = 0; side < 2; side++) for (var r = 0; r < 2; r++) {
+      var ty = g.rows[side][r];
+      if (y >= ty && y < ty + g.hh) return 40 * r + s;
+    }
+    return -1;
+  }
+  // 257-bit block in slot s (0-79) of the close-up, or null for an AM slot.
+  function amSlotBlock(s) {
+    var first = P.slot257(cur.q * P.PAIR_SLOTS + P.AM_SLOTS).block;
+    if (s < P.AM_SLOTS) return null;
+    return first + s - P.AM_SLOTS;
+  }
+
   function drawAm(W) {
     amPeriod(W, step);
-    var q = cur.q, x0 = 70, sw = (W - x0 - 16) / 40, hh = 34, k = amDetail(step);
-    // Each side is two rows of 40: slots 0-39, then the 40 regular blocks of slots 40-79.
-    var y1 = 160, y1n = y1 + hh + 20, y2 = 300, y2n = y2 + hh + 8;
-    var b0 = P.slot257(q * 40 + P.AM_SLOTS).block + P.PAIR_SLOTS - P.AM_SLOTS;
+    var q = cur.q, g = amGeo(W), x0 = g.x0, sw = g.sw, hh = g.hh, k = amDetail(step);
+    var y1 = g.rows[0][0], y1n = g.rows[0][1], y2 = g.rows[1][0], y2n = g.rows[1][1];
+    var b0 = amSlotBlock(P.PAIR_SLOTS);
     label('before', 8, y1 + hh / 2, th.muted, 11);
     label('after', 8, y2 + hh / 2, th.muted, 11);
     function tile(x, y, b) { box(x + 1, y, sw - 2, hh, th.edge); if (sw > 18) label(String(b), x + sw / 2, y + hh / 2, th.paper, 9, 'center'); }
@@ -3409,7 +3447,12 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     label('rate matching has left 4 block slots (1028 bits) empty', x0, y1 - 12, th.muted, 10);
     label('4 AM blocks (1028 bits), then the 257-bit blocks resume', x0, y2n + hh + 22, th.ink, 11, 'left', 600);
     label('slots 40–79: 40 regular 257-bit blocks, no AM until 81,920 blocks after this group', x0, y2n + hh + 40, th.muted, 10);
-    label('colours = which lane’s marker each 10 bits belong to · number in a tile = 257-bit block', x0, y2n + hh + 56, th.muted, 10);
+    label('colours = which lane’s marker each 10 bits belong to · number in a tile = 257-bit block · click a slot to see its bits', x0, y2n + hh + 56, th.muted, 10);
+    // The picked slot, outlined in both the before and after rows.
+    if (pick >= 0) {
+      var px = x0 + (pick % 40) * sw, r = pick < 40 ? 0 : 1;
+      [g.rows[0][r], g.rows[1][r]].forEach(function (y) { box(px - 1, y - 2, sw + 2, hh + 4, null, th.ink, 2); });
+    }
   }
 
   // The PCS lanes of one SerDes lane, bit by bit.
@@ -3483,15 +3526,87 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     $('opv-play').textContent = anim ? 'Pause' : step < N ? 'Play' : 'Animate';
     $('opv-count').textContent = stepping ? Math.min(step, N) + ' / ' + N : '';
     cv.setAttribute('aria-label', v.title + '. ' + v.where(cur) + '.');
+    pickPanel();
     dirty = true; draw();
   }
+
+  /* ---- AM view: what AM insertion does to one clicked slot ---- */
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  // am_mapped<hi:lo>, bit 0 first: one coloured run per 10 bits of a lane's marker, then pad and status.
+  function amBits(lo, hi) {
+    var h = '', run = '', key = null, tip = '';
+    function flush() { if (run) h += '<span class="' + key + '" title="' + tip + '">' + run + '</span>'; run = ''; }
+    for (var b = lo; b <= hi; b++) {
+      var t = P.pairBit(cur.q, b), k = t.src === 'am' ? 'l' + t.lane : t.src;
+      if (k !== key || (t.src === 'am' && b % 10 === 0)) {
+        flush(); key = k;
+        tip = t.src === 'am' ? 'am_' + t.lane + ' bits ' + t.n + '–' + (t.n + 9 - t.n % 10) : t.src === 'pad' ? '65-bit pad' : '3-bit status field';
+      }
+      run += t.v;
+    }
+    flush();
+    return h;
+  }
+  function amSummary(lo, hi) {
+    var m = 0, p = 0, f = 0;
+    for (var b = lo; b <= hi; b++) { var s = P.pairBit(cur.q, b).src; if (s === 'am') m++; else if (s === 'pad') p++; else f++; }
+    return 'These 257 bits are am_mapped<' + hi + ':' + lo + '>: ' + m + ' bits of the 8 lane markers' + (p ? ', the ' + p + '-bit pad' : '') + (f ? ' and the ' + f + '-bit status field' : '') + '. ' +
+      'Each coloured run is 10 bits of one lane’s marker (hover for which bits); after pre-FEC and symbol distribution every PCS lane gets back its own 120-bit marker.' +
+      (p ? ' The lab’s pad pattern stands in for PRBS9.' : '');
+  }
+  function blockText(b) { var h = ''; for (var i = 0; i < 32; i++) h += esc(glyph(P.byteAt(32 * b + i))); return h; }
+  function blockCells(b) {
+    var h = '<div class="cells"><span class="cell hdr"><b>1</b><i>hdr</i></span>';
+    for (var i = 0; i < 32; i++) {
+      var c = P.byteAt(32 * b + i);
+      h += '<span class="cell' + (c === 32 ? ' sp' : '') + '"><b>' + (c === 32 ? '&nbsp;' : esc(P.glyph(c))) + '</b><i>' + P.hex(c, 2) + '</i></span>';
+    }
+    return h + '</div>';
+  }
+  var pickKey = null;
+  function pickPanel() {
+    var el = $('opv-pick');
+    if (!el) return;
+    el.hidden = mode !== 'am';
+    var key = mode === 'am' ? pick + ':' + cur.q + ':' + P.payloadVersion : null;
+    if (key === pickKey) return;
+    pickKey = key;
+    if (mode !== 'am') { el.innerHTML = ''; return; }
+    if (pick < 0) {
+      el.innerHTML = '<div class="pk-head"><span class="note">Click a slot in the rows above to see its 257 bits before and after AM insertion.</span>' +
+        '<button type="button" class="btn" data-act="pk-next">Show slot 0</button></div>';
+      return;
+    }
+    var s = pick, b = amSlotBlock(s), next = s >= P.PAIR_SLOTS, h;
+    h = '<div class="pk-head"><button type="button" class="btn" data-act="pk-prev" aria-label="Previous slot">‹</button><b>Slot ' + s + ': ' +
+      (b === null ? 'AM block ' + (s + 1) + ' of 4' : '257-bit block ' + b) + '</b><button type="button" class="btn" data-act="pk-next" aria-label="Next slot">›</button>' +
+      '<span class="opv-sp"></span><button type="button" class="btn" data-act="pk-clear">Clear</button></div>';
+    var before, after, foot;
+    if (b === null) {
+      var lo = 257 * s, hi = lo + 256;
+      before = '<div class="pk-empty">Empty. Rate matching deleted idles here, so no data block has to move to make room.</div>';
+      after = '<p class="pk-eq">tx_scrambled_am&lt;' + hi + ':' + lo + '&gt; = am_mapped&lt;' + hi + ':' + lo + '&gt;</p><div class="ambits" title="bit 0 first">' + amBits(lo, hi) + '</div>';
+      foot = '<p class="note">' + esc(amSummary(lo, hi)) + '</p>';
+    } else {
+      // tx_scrambled_i is counted within one 10,280-bit block (119.2.4.4.1).
+      var i = next ? s - P.PAIR_SLOTS : s - P.AM_SLOTS, lo2 = next ? 257 * i : 257 * i + P.AM_BITS;
+      before = '<p class="pk-eq">tx_scrambled_' + i + '&lt;256:0&gt;</p><p class="pk-txt">' + blockText(b) + '</p>';
+      after = '<p class="pk-eq">tx_scrambled_am&lt;' + (lo2 + 256) + ':' + lo2 + '&gt; = tx_scrambled_' + i + '&lt;256:0&gt;</p><p class="pk-txt">' + blockText(b) + '</p>';
+      foot = blockCells(b) + '<p class="note">' + (next
+        ? 'Slot ' + s + ' is slot ' + i + ' of the next 10,280-bit block. That block has no AM group, so its 40 blocks pass through unchanged and in order. The next AM group comes 81,920 blocks after this one.'
+        : 'AM insertion changes no bit of this block and does not move it: the 4 AM blocks fill the room rate matching freed, so block ' + b + ' keeps slot ' + s + '.') +
+        ' Header bit 1 (all four 64-bit payloads are data), then 32 bytes, bit 0 of each byte first. Shown unscrambled.</p>';
+    }
+    el.innerHTML = h + '<div class="pk-cols"><div><span class="pk-lab">BEFORE</span>' + before + '</div><div><span class="pk-lab">AFTER</span>' + after + '</div></div>' + foot;
+  }
+  function pickNav(d) { pick = (pick + d + 2 * P.PAIR_SLOTS) % (2 * P.PAIR_SLOTS); sync(); }
 
   // Open view m on the unit that is in its box right now.
   P.openView = function (m) {
     if (!dlg || !VIEWS[m]) return;
     if (P.inspectorOpen && P.inspectorOpen()) P.closeInspector();
     if (S.playing) P.setPlaying(false);
-    mode = m; cur = VIEWS[m].at();
+    mode = m; cur = VIEWS[m].at(); pick = -1;
     step = VIEWS[m].steps; anim = stepping = false; acc = 0;
     $('opv-title').textContent = VIEWS[m].title;
     $('opv-note').textContent = NOTES[m];
@@ -3553,6 +3668,20 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       else if (a === 'prev' || a === 'next') nav(a === 'next' ? 1 : -1);
       else if (a === 'play') playToggle();
       else if (a === 'step') P.viewStep();
+      else if (a === 'pk-prev' || a === 'pk-next') { pickNav(a === 'pk-next' ? 1 : -1); var f = dlg.querySelector('[data-act="' + a + '"]'); if (f) f.focus(); }
+      else if (a === 'pk-clear') { pick = -1; sync(); }
+    });
+    // AM view: click a slot tile to see what AM insertion did to it.
+    function canvasPoint(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+    cv.addEventListener('click', function (e) {
+      if (mode !== 'am') return;
+      var p = canvasPoint(e), s = amHit(p.x, p.y);
+      if (s < 0) return;
+      pick = s === pick ? -1 : s; sync();
+    });
+    cv.addEventListener('mousemove', function (e) {
+      var p = canvasPoint(e);
+      cv.style.cursor = mode === 'am' && amHit(p.x, p.y) >= 0 ? 'pointer' : '';
     });
     dlg.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { nav(e.key === 'ArrowRight' ? 1 : -1); e.preventDefault(); }
