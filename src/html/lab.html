@@ -91,7 +91,11 @@
         <div><h3 id="opv-title"></h3><p class="opv-where" id="opv-where"></p></div>
         <button type="button" class="ins-x" data-act="close" aria-label="Close">×</button>
       </header>
-      <div class="opv-wrap" id="opv-wrap"><canvas id="opv-canvas" role="img"></canvas></div>
+      <div class="opv-stage">
+        <button type="button" class="opv-pg" data-act="page" id="opv-pg-l" hidden>‹</button>
+        <div class="opv-wrap" id="opv-wrap"><canvas id="opv-canvas" role="img"></canvas></div>
+        <button type="button" class="opv-pg" data-act="page" id="opv-pg-r" hidden>›</button>
+      </div>
       <div class="opv-pick" id="opv-pick" hidden aria-live="polite"></div>
       <p class="note opv-note" id="opv-note"></p>
       <footer class="opv-foot">

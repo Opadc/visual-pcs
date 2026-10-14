@@ -100,7 +100,12 @@ input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offs
 .opv-head { display: flex; justify-content: space-between; align-items: start; gap: 10px; }
 .opv-head h3 { font-size: var(--s1); font-stretch: 92%; }
 .opv-where { font-family: var(--f-mono); font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
-.opv-wrap { overflow-x: auto; }
+.opv-stage { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.opv-wrap { overflow-x: auto; flex: 1; min-width: 0; }
+.opv-pg { flex: none; width: 32px; height: 64px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink);
+  font-size: 1.5rem; line-height: 1; cursor: pointer; }
+.opv-pg:hover { border-color: var(--ink); }
+.opv-pg:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .opv-wrap canvas { display: block; }
 .opv-note { max-width: 88ch; }
 .opv-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--rule-2); padding-top: 8px; }

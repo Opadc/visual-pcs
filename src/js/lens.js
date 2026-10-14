@@ -16,6 +16,7 @@
   'use strict';
   var S = P.state, dlg, cv, ctx, dpr = 1, mode = null, cur = null;
   var pick = -1;   // AM view: the clicked slot 0-79, or -1
+  var pfPage = 0;  // pre-FEC view: 0 = overview, 1 = the actual bits
   var step = 0, acc = 0, anim = false, stepping = false, dirty = true;
   var UPAIR = P.UNITS_PER_PAIR * P.GAP, U257 = UPAIR / P.PAIR_SLOTS, U66 = U257 / 4;
 
@@ -35,6 +36,7 @@
   function cwName(w) { return w ? 'B' : 'A'; }
 
   /* ---- views: what is in the box, how to step, what to call it ---- */
+  var PF_SYMS = 8, PF_LAST = 1028 - PF_SYMS;
   var VIEWS = {
     b66: { title: '64B/66B encode', stage: 2, steps: 9, rate: 3, h: 300,
       at: function () { return { t: nextData66(Math.round((S.u - boxMid('b66')) / U66), 1) }; },
@@ -54,17 +56,19 @@
         var b = P.slot257(c.q * P.PAIR_SLOTS + P.AM_SLOTS).block;
         return 'AM insertion ' + c.q / P.AM_PAIRS + ': 4 AM blocks, then 257-bit blocks ' + b + '–' + (b + 2 * P.PAIR_SLOTS - P.AM_SLOTS - 1) + ' in slots 4–79';
       } },
-    prefec: { title: 'Pre-FEC distribution', stage: 3, steps: 16, rate: 4, h: 360,
+    // PF_SYMS stream symbols per window: the most that fit on one row with readable bits.
+    prefec: { title: 'Pre-FEC distribution', stage: 3, steps: PF_SYMS, rate: 3, h: 376,
       at: function () {
-        var p = pairAt(boxMid('prefec')), j = Math.floor(p.f * 1028) - 8;
-        return { q: p.q, j: Math.max(0, Math.min(1012, j - mod(j, 2))) };
+        var p = pairAt(boxMid('prefec')), j = Math.floor(p.f * 1028) - PF_SYMS / 2;
+        return { q: p.q, j: Math.max(0, Math.min(PF_LAST, j - mod(j, 2))) };
       },
       nav: function (c, d) {
-        if (d > 0) return c.j >= 1012 ? { q: c.q + 1, j: 0 } : { q: c.q, j: Math.min(1012, c.j + 16) };
-        return c.j <= 0 ? { q: c.q - 1, j: 1012 } : { q: c.q, j: Math.max(0, c.j - 16) };
+        if (d > 0) return c.j >= PF_LAST ? { q: c.q + 1, j: 0 } : { q: c.q, j: Math.min(PF_LAST, c.j + PF_SYMS) };
+        return c.j <= 0 ? { q: c.q - 1, j: PF_LAST } : { q: c.q, j: Math.max(0, c.j - PF_SYMS) };
       },
       where: function (c) {
-        return 'Pair ' + c.q + ': stream symbols ' + c.j + '–' + (c.j + 15) + ' of 1028 → A' + c.j / 2 + '–A' + (c.j / 2 + 7) + ' and B' + c.j / 2 + '–B' + (c.j / 2 + 7);
+        var n = PF_SYMS / 2 - 1;
+        return 'Pair ' + c.q + ': stream symbols ' + c.j + '–' + (c.j + PF_SYMS - 1) + ' of 1028 → A' + c.j / 2 + '–A' + (c.j / 2 + n) + ' and B' + c.j / 2 + '–B' + (c.j / 2 + n);
       } },
     rs: { title: 'RS(544,514) encode', stage: 3, steps: 30, rate: 8, h: 316,
       at: function () { return { q: pairAt(boxMid('rs')).q }; },
@@ -277,7 +281,6 @@
     label('d_0…d_3 are copied unchanged: 4 × 66 = 264 bits in, 1 + 4 × 64 = 257 bits out', x0, yc + 18, th.muted, 10);
   }
 
-  /* ---- pre-FEC distribution: the stream on the left, m_A over m_B on the right ---- */
   // Fill for stream bit b: by source character (two shades so neighbours differ),
   // the 257-bit header, or the AM group.
   function bitFill(q, b) {
@@ -315,33 +318,93 @@
     }
     ctx.globalAlpha = 1;
   }
-  function drawPrefec(W) {
-    var q = cur.q, j0 = cur.j, k = step, h = hot();
-    var mid = W / 2, x0 = 70, lx1 = mid - 26, rx = mid + 26, rx1 = W - 16, g = 6;
-    var lw = (lx1 - x0 - 3 * g) / 4, rw = (rx1 - rx - 3 * g) / 4, rh = 58, rg = 12, y0 = 44;
-    label('in: the bit stream, 10 bits per symbol', x0, 18, th.ink, 11, 'left', 600);
-    label('out: two messages', rx, 18, th.ink, 11, 'left', 600);
-    for (var r = 0; r < 4; r++) label(String(j0 + 4 * r), 8, y0 + r * (rh + rg) + 27, th.muted, 10);
-    var yA = y0, yB = y0 + 2 * (rh + rg);
-    label('m_A', rx - 8, yA + rh, th.ink, 11, 'right', 700);
-    label('m_B', rx - 8, yB + rh, th.ink, 11, 'right', 700);
-    function lpos(t) { return [x0 + (t % 4) * (lw + g), y0 + Math.floor(t / 4) * (rh + rg)]; }
-    function rpos(t) { var i = t >> 1, w2 = t & 1; return [rx + (i % 4) * (rw + g), (w2 ? yB : yA) + Math.floor(i / 4) * (rh + rg)]; }
-    for (var t = 0; t < 16; t++) {
-      var j = j0 + t, name = (j & 1 ? 'B' : 'A') + (j >> 1), L = lpos(t), R = rpos(t);
-      symTile(L[0], L[1], lw, q, j, 's' + j, k > t && stepping);
-      if (k > t) symTile(R[0], R[1], rw, q, j, name, false);
-      else box(R[0], R[1], rw, 37, null, th.rule);
-      if (t === h) {
-        box(L[0] - 2, L[1] - 2, lw + 4, 41, null, th.ink, 2); box(R[0] - 2, R[1] - 2, rw + 4, 41, null, th.ink, 2);
-        ctx.strokeStyle = th.ink; ctx.lineWidth = 1.2; ctx.beginPath();
-        ctx.moveTo(L[0] + lw + 2, L[1] + 18); ctx.bezierCurveTo(mid, L[1] + 18, mid, R[1] + 18, R[0] - 2, R[1] + 18); ctx.stroke();
-      }
+  /* ---- pre-FEC distribution, page 0: overview with concept view.
+     One horizontal stream interleaves into two vertical message columns,
+     shown as slim bars with dotted symbol boundaries. Each animation step
+     shows one symbol's arrow. ---- */
+  var PF_CON = 32;   // animation steps = symbols shown during animation
+  var PF_CONCEPT = { title: 'Pre-FEC distribution', steps: PF_CON, rate: 3, h: 320,
+    where: function () { return 'Overview: 1028 ten-bit symbols dealt alternately between m_A and m_B'; } };
+  function drawPrefecConcept(W) {
+    var k = step, h = hot();
+    var x0 = 70, y0 = 60, h_in = 20, h_out = 12, gap = 60;
+    var xA = x0 + 40, xB = W - 120, yA = y0 + gap, yB = yA + h_out * 16 + 30;
+    // Slim bars with dotted symbol boundaries.
+    function streamBar(x, y, w, h, label, ylab) {
+      box(x, y, w, h, th.edge);
+      ctx.strokeStyle = th.muted; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+      for (var n = 1; n < 32; n++) { var xx = x + n * w / 32; ctx.beginPath(); ctx.moveTo(xx, y); ctx.lineTo(xx, y + h); ctx.stroke(); }
+      ctx.setLineDash([]);
+      label(label, x - 30, ylab || y + h / 2, th.ink, 10, 'right', 600);
     }
-    if (h < 0) arrow(mid - 18, mid + 18, y0 + 2 * (rh + rg) - rg / 2);
-    var yc = y0 + 4 * (rh + rg) + 4;
-    label('even symbols go to A, odd to B: A_i = stream bits 20i…20i+9, B_i = bits 20i+10…20i+19 (119.2.4.5)', x0, yc, th.ink, 10, 'left', 600);
-    label('bit shading changes at each character boundary; ' + (P.isAmPair(q) && j0 < 102 ? 'lane colours = alignment-marker bits, ' : '') + 'dark = 257-bit block header', x0, yc + 18, th.muted, 10);
+    streamBar(x0, y0, 140, h_in, 'in: stream →', y0 + h_in / 2);
+    streamBar(xA, yA, h_out, h_out * 16, '↓\nm_A', yA + h_out * 8 - 12);
+    streamBar(xB, yB, h_out, h_out * 16, '↓\nm_B', yB + h_out * 8 - 12);
+    // Symbol slot markers.
+    for (var s = 0; s <= 32; s++) {
+      var x = x0 + s * 140 / 32;
+      ctx.strokeStyle = th.muted; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, y0 - 2); ctx.lineTo(x, y0 - 8); ctx.stroke();
+      if (s % 4 === 0) label(String(s), x, y0 - 14, th.muted, 9, 'center');
+    }
+    // The stream moves left-to-right as symbols are dealt.
+    var sPos = k < 32 ? x0 + k * 140 / 32 : 0, dealt = Math.floor(k);
+    // Draw dealt symbols as vertical stacks: each row is 4 symbols in a 2x2 grid of columns.
+    var aIdx = 0, bIdx = 0;
+    for (var s = 0; s < dealt; s++) {
+      var col = (s >> 1) % 4, row = Math.floor(s / 8);
+      var odd = s & 1;
+      var xx = (odd ? xB : xA) + col * h_out * 0.8;
+      var yy = (odd ? yB : yA) + row * h_out;
+      box(xx, yy, h_out - 2, h_out - 2, odd ? th.b : th.a);
+    }
+    // The single active arrow points from the stream to its destination.
+    if (h >= 0 && h < 32) {
+      var src_x = x0 + h * 140 / 32, src_y = y0 + h_in / 2;
+      var odd = h & 1, dst_col = (h >> 1) % 4, dst_row = Math.floor(h / 8);
+      var dst_x = (odd ? xB : xA) + dst_col * h_out * 0.8 + h_out / 2;
+      var dst_y = (odd ? yB : yA) + dst_row * h_out + h_out / 2;
+      ctx.strokeStyle = th.ink; ctx.fillStyle = th.ink; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(src_x, src_y + 2); ctx.quadraticCurveTo((src_x + dst_x) / 2, 150, dst_x, dst_y - 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(dst_x, dst_y); ctx.lineTo(dst_x - 4, dst_y - 6); ctx.lineTo(dst_x + 4, dst_y - 6); ctx.closePath(); ctx.fill();
+    }
+    var yc = yB + h_out * 16 + 22;
+    label('every 10-bit symbol (s0, s1, s2, …) goes to m_A or m_B in turn; the PCS then RS(544,514) encodes each message', x0, yc, th.ink, 10, 'left', 600);
+    label('a burst of errors on the line splits between the two codewords, so each corrects fewer bad symbols. Next page: the actual bits', x0, yc + 18, th.muted, 10);
+  }
+
+
+  /* ---- pre-FEC distribution, page 1: detailed bits view with actual 10-bit tiles.
+     Stream horizontal at top, m_A and m_B below. ---- */
+  function drawPrefec(W) {
+    var q = cur.q, j0 = cur.j, k = step, h = hot(), N = PF_SYMS;
+    var x0 = 70, g = 6, sw = (W - 16 - x0 - (N - 1) * g) / N, th1 = 52;
+    var yS = 40, yA = 152, yB = 252;
+    label('in: the bit stream tx_scrambled_am, 10 bits per symbol, bit 0 first →', x0, 16, th.ink, 11, 'left', 600);
+    label('stream', 8, yS + 27, th.ink, 11, 'left', 700);
+    label('m_A', 8, yA + 27, th.ink, 11, 'left', 700);
+    label('m_B', 8, yB + 27, th.ink, 11, 'left', 700);
+    label('even s', 8, yA + 43, th.muted, 9);
+    label('odd s', 8, yB + 43, th.muted, 9);
+    for (var t = 0; t < N; t++) {
+      var j = j0 + t, i = j >> 1, odd = j & 1, x = x0 + t * (sw + g), yd = odd ? yB : yA, cx = x + sw / 2;
+      var done = k > t, on = t === h;
+      symTile(x, yS, sw, q, j, 's' + j, done && stepping);
+      label(fit(['bits ' + 10 * j + '–' + (10 * j + 9), String(10 * j)], sw, 9), cx, yS + th1 + 10, th.muted, 9, 'center');
+      // The drop: faint once dealt, bold for the symbol being dealt now.
+      if (done) {
+        ctx.strokeStyle = on ? th.ink : mix(th.muted, th.paper, 0.45); ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = on ? 1.6 : 1;
+        ctx.beginPath(); ctx.moveTo(cx, yS + th1 + 18); ctx.lineTo(cx, yd - 4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx, yd - 4); ctx.lineTo(cx - 4, yd + 3); ctx.lineTo(cx + 4, yd + 3); ctx.closePath(); ctx.fill();
+      }
+      if (done) symTile(x, yd, sw, q, j, (odd ? 'B' : 'A') + i, false);
+      else box(x, yd, sw, 37, null, th.rule);
+      label(fit([(odd ? 'm_B' : 'm_A') + '<' + (513 - i) + '>', String(513 - i)], sw, 9), cx, yd + th1 + 10, th.muted, 9, 'center');
+      if (on) { box(x - 2, yS - 2, sw + 4, 41, null, th.ink, 2); box(x - 2, yd - 2, sw + 4, 41, null, th.ink, 2); }
+    }
+    var yc = yB + th1 + 30;
+    label('round robin, 10 bits at a time: m_A<513−i> = stream bits 20i…20i+9, m_B<513−i> = bits 20i+10…20i+19 (119.2.4.5)', x0, yc, th.ink, 10, 'left', 600);
+    label('A_i / B_i = the i-th symbol of each message in sending order; m<513−i> is the same symbol as a polynomial coefficient', x0, yc + 18, th.muted, 10);
+    label('bit shading changes at each character boundary; ' + (P.isAmPair(q) && j0 < 102 ? 'lane colours = AM bits; ' : '') + 'dark = 257-bit block header', x0, yc + 34, th.muted, 10);
   }
 
   /* ---- RS(544,514): 514 message symbols in, the same 514 + 30 parity out ---- */
@@ -629,11 +692,22 @@
     return P.cwSymbol(cur.q, id.w, id.i).bits[b % 10];
   }
 
-  var DRAW = { b66: drawB66, b257: drawB257, am: drawAm, prefec: drawPrefec, rs: drawRs, dist: drawDist, mux: drawMux };
-  function height() { return mode === 'mux' ? 152 + 22 * S.link.k : VIEWS[mode].h; }
+  var DRAW = { b66: drawB66, b257: drawB257, am: drawAm, prefec: function (W) { (pfPage ? drawPrefec : drawPrefecConcept)(W); }, rs: drawRs, dist: drawDist, mux: drawMux };
+  // The view in force: the pre-FEC view has an overview page with its own steps and size.
+  function view() { return mode === 'prefec' && !pfPage ? PF_CONCEPT : VIEWS[mode]; }
+  function height() { return mode === 'mux' ? 152 + 22 * S.link.k : view().h; }
 
+  // Page arrows of the pre-FEC view. Set before sizing: they take width from the canvas.
+  function pageArrows() {
+    ['opv-pg-l', 'opv-pg-r'].forEach(function (id) {
+      var b = $(id), t = pfPage ? 'Back to the overview' : 'Show the actual bits';
+      if (!b) return;
+      b.hidden = mode !== 'prefec'; b.title = t; b.setAttribute('aria-label', t);
+    });
+  }
   function size() {
     if (!cv || !mode) return;
+    pageArrows();
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     // Narrow screens scroll the view sideways rather than squeezing 10-bit tiles.
     var w = Math.max(620, cv.parentElement.clientWidth), h = height();
@@ -654,8 +728,8 @@
 
   function $(id) { return document.getElementById(id); }
   function sync() {
-    var v = VIEWS[mode], N = v.steps;
-    $('opv-where').textContent = v.where(cur);
+    var v = view(), N = v.steps;
+    $('opv-where').textContent = v.where(cur) + (mode === 'prefec' ? ' · page ' + (pfPage + 1) + ' of 2' : '');
     $('opv-prev').hidden = $('opv-next').hidden = !v.nav;
     $('opv-play').textContent = anim ? 'Pause' : step < N ? 'Play' : 'Animate';
     $('opv-count').textContent = stepping ? Math.min(step, N) + ' / ' + N : '';
@@ -740,9 +814,9 @@
     if (!dlg || !VIEWS[m]) return;
     if (P.inspectorOpen && P.inspectorOpen()) P.closeInspector();
     if (S.playing) P.setPlaying(false);
-    mode = m; cur = VIEWS[m].at(); pick = -1;
-    step = VIEWS[m].steps; anim = stepping = false; acc = 0;
-    $('opv-title').textContent = VIEWS[m].title;
+    mode = m; cur = VIEWS[m].at(); pick = -1; pfPage = 0;
+    step = view().steps; anim = stepping = false; acc = 0;
+    $('opv-title').textContent = view().title;
     $('opv-note').textContent = NOTES[m];
     if (!dlg.open) dlg.showModal();
     size(); sync();
@@ -752,21 +826,27 @@
 
   function playToggle() {
     if (!mode) return;
-    var N = VIEWS[mode].steps;
+    var N = view().steps;
     if (anim) anim = false;
     else { if (step >= N) step = 0; anim = stepping = true; acc = 0; }
     sync();
   }
   P.viewStep = function () {
     if (!mode) return false;
-    var N = VIEWS[mode].steps;
+    var N = view().steps;
     anim = false; stepping = true;
     step = step >= N ? 1 : step + 1;
     sync();
     return true;
   };
+  // Pre-FEC view: two pages, so either arrow goes to the other one. Each page starts complete.
+  function flipPage() {
+    pfPage = 1 - pfPage;
+    step = view().steps; anim = stepping = false; acc = 0;
+    size(); sync();
+  }
   function nav(d) {
-    var v = VIEWS[mode];
+    var v = view();
     if (!v || !v.nav) return;
     cur = v.nav(cur, d);
     step = v.steps; anim = stepping = false;
@@ -777,8 +857,8 @@
   P.viewTick = function (dt) {
     if (!mode) return;
     if (anim) {
-      var N = VIEWS[mode].steps;
-      acc += dt * VIEWS[mode].rate;
+      var N = view().steps;
+      acc += dt * view().rate;
       var n = Math.floor(acc);
       if (n) { acc -= n; step = Math.min(N, step + n); if (step >= N) anim = false; sync(); }
     }
@@ -804,6 +884,7 @@
       else if (a === 'step') P.viewStep();
       else if (a === 'pk-prev' || a === 'pk-next') { pickNav(a === 'pk-next' ? 1 : -1); var f = dlg.querySelector('[data-act="' + a + '"]'); if (f) f.focus(); }
       else if (a === 'pk-clear') { pick = -1; sync(); }
+      else if (a === 'page') flipPage();
     });
     // AM view: click a slot tile to see what AM insertion did to it.
     function canvasPoint(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
@@ -818,7 +899,10 @@
       cv.style.cursor = mode === 'am' && amHit(p.x, p.y) >= 0 ? 'pointer' : '';
     });
     dlg.addEventListener('keydown', function (e) {
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { nav(e.key === 'ArrowRight' ? 1 : -1); e.preventDefault(); }
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      // On the overview there is nothing to step through, so the arrows turn the page.
+      if (mode === 'prefec' && !pfPage) flipPage(); else nav(e.key === 'ArrowRight' ? 1 : -1);
+      e.preventDefault();
     });
     // The close event is queued; a view reopened in the meantime must survive it.
     dlg.addEventListener('close', function () { if (!dlg.open) { mode = null; cur = null; anim = stepping = false; } });
