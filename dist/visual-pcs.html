@@ -3193,59 +3193,36 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     }
     ctx.globalAlpha = 1;
   }
-  /* ---- pre-FEC distribution, page 0: overview with symbol interleaving.
-     The 1028-bit stream read as 1028 ten-bit symbols, dealt alternately
-     to m_A and m_B. Shows the stream at top, the two growing message grids
-     below, and an arrow animating each symbol to its destination. ---- */
+  /* ---- pre-FEC distribution, page 0: overview showing the interleaving concept.
+     Horizontal input bitstream at top with dashed symbol boundaries.
+     Two vertical output bitstreams below, one for each message. ---- */
   var PF_CON = 32;   // animation steps = symbols shown during animation
-  var PF_CONCEPT = { title: 'Pre-FEC distribution', steps: PF_CON, rate: 3, h: 320,
-    where: function () { return 'Overview: 1028-bit stream → 1028 ten-bit symbols → 514 each to m_A and m_B'; } };
+  var PF_CONCEPT = { title: 'Pre-FEC distribution', steps: PF_CON, rate: 3, h: 400,
+    where: function () { return 'Overview: 10,280-bit stream alternately interleaved into two 5,140-bit messages'; } };
   function drawPrefecConcept(W) {
     var k = step, h = hot();
-    var x0 = 70, y0 = 40, y1 = 110, y2A = 160, y2B = 220;
-    var sw = (W - 16 - x0 - 31 * 4) / 32, cw = sw / 10;   // symbol width, color-cell width
-    label('in: 1028-bit stream, read as 10-bit symbols →', x0, 16, th.ink, 11, 'left', 600);
-    label('stream', 8, y0 + 20, th.ink, 10, 'left', 700);
-    // Stream symbols: show first 32 symbols being dealt.
-    for (var s = 0; s < 32; s++) {
-      var x = x0 + s * (sw + 4);
-      var on = s < k, odd = s & 1;
-      // Simplified symbol tile: just show if it's dealt and whether it goes to A or B.
-      box(x, y0, sw, 24, on ? (odd ? th.b : th.a) : null, on ? null : th.rule, 1);
-      if (on && sw > 10) label('s' + s, x + sw / 2, y0 + 12, onFill(odd ? th.b : th.a), 9, 'center', 600);
+    var x0 = 100, y0 = 60, wStream = W - x0 - 50;
+    var h_in = 30;
+    var xA = x0 + 40, xB = W - 110, yOut = y0 + h_in + 60, hOut = 250;
+    // Input bitstream: horizontal line with dashed symbol boundaries.
+    box(x0, y0, wStream, h_in, th.edge);
+    ctx.strokeStyle = th.muted; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    for (var s = 1; s < 32; s++) {
+      var x = x0 + s * wStream / 32;
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y0 + h_in); ctx.stroke();
     }
-    // Message grid A: 4 columns wide, rows fill as symbols are dealt.
-    label('m_A (even symbols)', 8, y2A + 40, th.ink, 10, 'left', 700);
-    var nA = Math.floor(k / 2);
-    for (var i = 0; i < nA; i++) {
-      var col = i % 4, row = Math.floor(i / 4);
-      var x = x0 + col * (sw + 4), y = y2A + row * 28;
-      box(x, y, sw, 24, th.a);
-      if (sw > 12) label('A' + i, x + sw / 2, y + 12, onFill(th.a), 9, 'center', 600);
-    }
-    // Message grid B: 4 columns wide, rows fill as symbols are dealt.
-    label('m_B (odd symbols)', 8, y2B + 40, th.ink, 10, 'left', 700);
-    var nB = Math.floor((k + 1) / 2);
-    for (var i = 0; i < nB; i++) {
-      var col = i % 4, row = Math.floor(i / 4);
-      var x = x0 + col * (sw + 4), y = y2B + row * 28;
-      box(x, y, sw, 24, th.b);
-      if (sw > 12) label('B' + i, x + sw / 2, y + 12, onFill(th.b), 9, 'center', 600);
-    }
-    // Active arrow: from current symbol to its destination.
-    if (h >= 0 && h < 32) {
-      var src_x = x0 + h * (sw + 4) + sw / 2, src_y = y0 + 24;
-      var odd = h & 1, idx = Math.floor(h / 2);
-      var dst_col = idx % 4, dst_row = Math.floor(idx / 4);
-      var dst_x = x0 + dst_col * (sw + 4) + sw / 2;
-      var dst_y = (odd ? y2B : y2A) + dst_row * 28;
-      ctx.strokeStyle = th.ink; ctx.fillStyle = th.ink; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(src_x, src_y); ctx.quadraticCurveTo((src_x + dst_x) / 2, (src_y + dst_y) / 2 - 20, dst_x, dst_y - 24); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(dst_x, dst_y - 24); ctx.lineTo(dst_x - 4, dst_y - 28); ctx.lineTo(dst_x + 4, dst_y - 28); ctx.closePath(); ctx.fill();
-    }
-    var yc = Math.max(y2A, y2B) + 140;
-    label('stream symbols 0, 2, 4, … → m_A<513>, m_A<512>, … ; symbols 1, 3, 5, … → m_B<513>, m_B<512>, …', x0, yc, th.ink, 10, 'left', 600);
-    label('next page shows all 1028 symbols and their 10-bit detail', x0, yc + 18, th.muted, 10);
+    ctx.setLineDash([]);
+    // Output bitstreams: vertical lines.
+    var vw = 12;
+    box(xA, yOut, vw, hOut, th.a);
+    box(xB, yOut, vw, hOut, th.b);
+    // Animated fill showing how much has been dealt to each output.
+    var nA = Math.floor(k / 2) * 10, nB = Math.floor((k + 1) / 2) * 10;   // bits, not symbols
+    var fillA = nA / (514 * 10) * hOut, fillB = nB / (514 * 10) * hOut;
+    ctx.fillStyle = mix(th.a, th.paper, 0.5);
+    ctx.fillRect(xA, yOut + hOut - fillA, vw, fillA);
+    ctx.fillStyle = mix(th.b, th.paper, 0.5);
+    ctx.fillRect(xB, yOut + hOut - fillB, vw, fillB);
   }
 
 
