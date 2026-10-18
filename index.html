@@ -182,8 +182,8 @@ input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offs
 }
 .legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .legend i { display: inline-block; }
-.lg-cube { width: 10px; height: 8px; background: var(--lane-1); }
-.lg-am { width: 4px; height: 13px; background: color-mix(in srgb, var(--lane-1) 55%, var(--scene-bg)); }
+.lg-cube { width: 10px; height: 8px; background: color-mix(in srgb, var(--lane-1) 35%, var(--scene-edge)); }
+.lg-am { width: 4px; height: 13px; background: var(--lane-1); }
 .lg-ring { width: 10px; height: 10px; border: 2px solid var(--good); border-radius: 50%; }
 .lg-sheath { width: 16px; height: 9px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 18%, transparent); }
 .lg-bad { width: 9px; height: 9px; background: var(--bad); }
@@ -695,6 +695,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
         <button type="button" class="btn" data-act="next" id="opv-next" title="The unit after this one (→)">Next →</button>
         <span class="opv-sp"></span>
         <span class="opv-count" id="opv-count" aria-live="polite"></span>
+        <button type="button" class="btn" data-act="phase" id="opv-phase" title="Start the demux one bit later" hidden>Phase</button>
         <button type="button" class="btn" data-act="step" id="opv-step" title="Add one unit (.)">Step</button>
         <button type="button" class="btn primary" data-act="play" id="opv-play" title="Replay one unit at a time (P)">Animate</button>
       </footer>
@@ -1657,7 +1658,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     { n: 4, side: 'TX', title: 'Symbol distribution and the 8 PCS lanes', span: [31, 45],
       body: '<p><b>Symbol distribution</b> interleaves codewords A and B 10 bits at a time and deals the result across PCS lanes 0 to 7 in turn. Lane 0 receives A0, B4, A8, B12 &hellip;, lane 1 receives B0, A4, B8 &hellip;; each lane gets 136 symbols of every codeword pair, half from each codeword.</p>' +
         '<p>Each PCS lane is a 26.5625 Gb/s stream. Its identity is in the data: the AM group was pre-interleaved so that each lane’s first 12 symbols are <b>its own 120-bit marker</b>, whose unique bytes name the lane. On transmit, PMA lane <i>i</i> carries PCS lane <i>i</i>.</p>',
-      watch: 'Each colour is one PCS lane. A cube is 4 lane symbols; the 3 tall pale cubes are the lane’s marker, launched on all 8 lanes together.',
+      watch: 'A cube is 4 lane symbols. The 3 tall cubes in full lane colour are the lane’s marker, launched on all 8 lanes together; data cubes are grey with a tint of their lane’s colour.',
       lens: ['dist'] },
     { n: 5, side: 'TX', title: 'PMA bit-multiplexing', span: [42, 51],
       body: '<p>The PMA interleaves PCS lanes <b>bit by bit</b> onto fewer physical lanes. With 4 SerDes lanes, two PCS lanes share each one; with 2, four share each. Every bit of a given PCS lane follows the same physical path for as long as the mapping holds.</p><p>The PMA does not look inside the data. It does not move AMs, decode FEC, or care which lane number it carries.</p>',
@@ -2005,6 +2006,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     return false;
   }
 
+  var LANE_TINT = 0.35;   // share of lane colour in a data cube
   // PCS-lane data units from symbol distribution to lane reorder. Cube n on a
   // lane is 4 PCS-lane symbols; the first 3 cubes of an AM pair are the marker.
   function drawLanes() {
@@ -2029,10 +2031,14 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
         var y = P.yPath(link, lane, x), z = P.zPath(link, lane, x);
         var isAm = P.isAmUnit(n), parity = isParityUnit(p, n);
         var state = '';
-        c.copy(G.col.lanes[p]);
+        // As in the popups: a lane's marker in its full colour, data grey with a
+        // lane tint (enough to tell lanes apart where they share a SerDes lane), parity darker.
         var len = 0.36 * comp, h = 0.42, d = 0.42;
-        if (isAm) { c.lerp(G.col.paper, 0.45); len = 0.46 * comp; h = 0.9; d = 0.85; y += 0.24; }
-        else if (parity) c.lerp(G.col.ink, 0.35);
+        if (isAm) { c.copy(G.col.lanes[p]); len = 0.46 * comp; h = 0.9; d = 0.85; y += 0.24; }
+        else {
+          c.copy(G.col.edge).lerp(G.col.lanes[p], LANE_TINT);
+          if (parity) c.lerp(G.col.ink, 0.45);
+        }
         if (dead && x > X.noiseAt && x < X.amLock + 0.5) {
           c.copy(G.col.muted); y += (P.hash(n, p) - 0.5) * 0.5; h *= 0.6; state = 'los';
         } else if (amBad && isAm && x > X.mux[0]) {
@@ -2898,8 +2904,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   'use strict';
   var S = P.state, dlg, cv, ctx, dpr = 1, mode = null, cur = null;
   var pick = -1;   // AM view: the clicked slot 0-79, or -1
-  var pfPage = 0;  // pre-FEC view: 0 = overview, 1 = the actual bits
-  var distPage = 0; // symbol dist view: 0 = overview, 1 = the detail
+  var page = 0;    // page of a two-page view (PAGES), 0 or 1
   var step = 0, acc = 0, anim = false, stepping = false, dirty = true;
   var UPAIR = P.UNITS_PER_PAIR * P.GAP, U257 = UPAIR / P.PAIR_SLOTS, U66 = U257 / 4;
 
@@ -2967,9 +2972,14 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       where: function (c) {
         return 'Pair ' + c.q + ': lane symbols ' + 4 * c.u + '–' + (4 * c.u + 3) + ' of 136 on every PCS lane' + (P.isAmPair(c.q) && c.u < P.AM_UNITS ? ' (alignment marker)' : '');
       } },
-    mux: { title: 'PMA bit-mux', stage: 5, steps: 40, rate: 10, h: 0,
-      at: function () { return { q: pairAt((P.X.mux[0] + P.X.mux[1]) / 2).q }; },
-      where: function (c) { return 'Pair ' + c.q + ', PCS lane bits from lane symbol 16 on, onto SerDes 0'; } }
+    mux: { title: 'PMA bit-mux', stage: 5, rate: 10,
+      get steps() { return muxK() > 1 ? MUX_BITS : 0; },
+      at: function () { return { q: pairAt((P.X.mux[0] + P.X.mux[1]) / 2).q, s: 0 }; },
+      nav: function (c, d) { return { q: c.q, s: mod(c.s + d, S.link.width) }; },
+      where: function (c) {
+        var l0 = muxL0();
+        return 'Pair ' + c.q + ', SerDes ' + mod(c.s, S.link.width) + ' of ' + S.link.width + ': PCS lane bits ' + l0 + '–' + (l0 + MUX_BITS / muxK() - 1) + ', across the end of the alignment marker';
+      } }
   };
   P.VIEWS = VIEWS;
 
@@ -2992,7 +3002,10 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       'over GF(2¹⁰). With 30 extra symbols the decoder can repair up to 15 bad symbols per codeword. Parity here is computed over the unscrambled bits the lab shows; a real link scrambles them first.',
     dist: 'Codewords A and B are interleaved 10 bits at a time and dealt across PCS lanes 0–7 in turn. On even lane symbols, lanes 0, 2, 4, 6 take A and lanes 1, 3, 5, 7 take B; odd lane symbols swap them. ' +
       'Each lane ends up with 136 symbols per codeword pair, half from each codeword. Tile colour is the lane a symbol goes to.',
-    mux: 'The PMA interleaves the bits of the PCS lanes that share a SerDes lane: one bit from each in turn. Change SerDes lanes in the toolbar to see 1, 2 or 4 PCS lanes per SerDes lane.'
+    mux: 'The PMA interleaves the bits of the PCS lanes that share a SerDes lane, one bit from each in turn; on PAM4 lanes each pair of bits becomes one of four levels. ' +
+      'Prev / Next walk the SerDes lanes; change SerDes lanes or the mapping in the toolbar to see 1, 2 or 4 PCS lanes per SerDes lane.',
+    muxRx: 'On receive, the PMA demultiplexes each SerDes lane back into PCS lanes. It only sees a stream of bits, so the PCS lanes may come out in any order (120.5.2). ' +
+      'That is why every PCS lane carries its own alignment marker: the PCS reads them to put the lanes back in order.'
   };
 
   /* ---- drawing helpers ---- */
@@ -3381,202 +3394,82 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     label('parity = remainder of m(x)·x³⁰ ÷ g(x), g(x) = (x−α⁰)(x−α¹)…(x−α²⁹) over GF(2¹⁰) (Clause 91)', x0, yb + 84, th.muted, 10);
   }
 
-  /* ---- symbol distribution: overview page 0 ---- */
-  // Abbreviated animation for the dist overview.
-  // Phase 0: 12 AM lane-symbols one by one (tx_out s 0..95, 8 per step).
-  // Phase 1: DC_HEAD data head symbols.
-  // Phase 2: middle bulk fills instantly (no steps).
-  // Phase 3: DC_TAIL data tail symbols.
-  // Phase 4: DC_PAR parity symbols.
-  var DC_AM = 12, DC_HEAD = 4, DC_TAIL = 4, DC_PAR = 30;
-  var DC_DATA = Math.round(514 / 8) - DC_AM;   // ~53: data symbols per lane excl AM
-  var DC_STEPS = DC_AM + DC_HEAD + DC_TAIL + DC_PAR;   // = 50
-  // How many AM / data / parity lane-symbols each lane has filled after step k.
-  function dcFill(k) {
-    if (k <= 0) return { am: 0, data: 0, parity: 0 };
-    if (k <= DC_AM) return { am: k, data: 0, parity: 0 };
-    var d = k - DC_AM;
-    if (d <= DC_HEAD) return { am: DC_AM, data: d, parity: 0 };
-    // After DC_HEAD the middle data bulk fills instantly.
-    var after = d - DC_HEAD;
-    if (after === 1) return { am: DC_AM, data: DC_AM + DC_DATA - DC_TAIL, parity: 0 };
-    var tailStep = after - 1;
-    if (tailStep <= DC_TAIL) return { am: DC_AM, data: DC_AM + DC_DATA - DC_TAIL + tailStep, parity: 0 };
-    var par = tailStep - DC_TAIL;
-    return { am: DC_AM, data: DC_AM + DC_DATA, parity: Math.min(par, DC_PAR) };
-  }
-  // Map animation step k to a tx_out symbol index (for drawing the active bezier).
-  function dcStepToTxOut(k) {
-    if (k < 0) return -1;
-    if (k < DC_AM) return k * 8;         // one group of 8 per AM step
-    var d = k - DC_AM;
-    if (d < DC_HEAD) return (DC_AM + d) * 8;
-    var after = d - DC_HEAD;
-    if (after === 1) return -1;          // bulk fill: no single bezier
-    var tailStep = after - 1;
-    if (tailStep <= DC_TAIL) {
-      var lane_sym = DC_AM + DC_DATA - DC_TAIL + (tailStep - 1);
-      return lane_sym * 8;
+  /* ---- symbol distribution, page 0: the overview, laid out like the pre-FEC
+     overview. Codewords A and B are two stream bars, their first DC_SYMS symbols
+     marked off by faint dashed lines; the 8 PCS lanes are thin vertical bars
+     below, one lane symbol per dashed row. Stepping deals tx_out symbols
+     s = 8k + p in order: each lands on PCS lane p as lane symbol k. ---- */
+  var DC_ROWS = 16, DC_SYMS = 4 * DC_ROWS, DC_STEPS = 8 * DC_ROWS;   // lane symbols shown, symbols per codeword, steps
+  var DIST_CONCEPT = { title: 'Symbol distribution · Overview', steps: DC_STEPS, rate: 12, h: 352,
+    nav: function (c, d) { return { q: c.q + d, u: c.u }; },
+    where: function (c) { return 'Pair ' + c.q + ': A0–A' + (DC_SYMS - 1) + ' and B0–B' + (DC_SYMS - 1) + ' → lane symbols 0–' + (DC_ROWS - 1) + ' of 136 on PCS lanes 0–7'; } };
+  // Tile colour on both symbol distribution pages: the lane's colour for a marker
+  // symbol, amber for the pad and status field, grey for data, darker grey for parity.
+  function distFill(q, w, i) {
+    if (i >= P.CW_K) return mix(th.edge, th.ink, 0.45);
+    var parts = P.cwSymbol(q, w, i).parts, f = th.edge;
+    for (var n = 0; n < parts.length; n++) {
+      if (parts[n].src === 'am') return th.lanes[parts[n].lane];
+      if (parts[n].src === 'pad' || parts[n].src === 'sf') f = th.am;
     }
-    var par = tailStep - DC_TAIL - 1;
-    return (Math.round(514 / 8) + par) * 8;
+    return f;
   }
-  // Layout geometry, shared with hit-testing.
-  function dcGeo(W) {
-    var x0 = 96, xE = W - 16, bw = xE - x0, barH = 12, barGap = 6;
-    var yA = 42, yB = yA + barH + barGap;
-    var laneW = 14, laneH = 220, yLane = yB + barH + 52;
-    var laneGap = Math.round((bw - 8 * laneW) / 7);
-    var laneStep = laneW + laneGap;
-    return { x0: x0, xE: xE, bw: bw, barH: barH, barGap: barGap,
-      yA: yA, yB: yB, laneW: laneW, laneH: laneH, yLane: yLane,
-      laneStep: laneStep,
-      cx: function (p) { return x0 + p * laneStep + laneW / 2; },
-      lx: function (p) { return x0 + p * laneStep; } };
-  }
-  // Hit-test: which { p, sym } is under canvas point, or null.
-  function dcHit(x, y) {
-    var g = dcGeo(cv.width / dpr);
-    if (y < g.yLane || y > g.yLane + g.laneH) return null;
-    for (var pp = 0; pp < 8; pp++) {
-      if (x >= g.lx(pp) && x < g.lx(pp) + g.laneW)
-        return { p: pp, sym: Math.min(135, Math.floor((y - g.yLane) * 136 / g.laneH)) };
-    }
-    return null;
-  }
-  var distPick = null;
-  var DIST_CONCEPT = { title: 'Symbol distribution · Overview', steps: DC_STEPS, rate: 8, h: 430,
-    nav: function (c, d) { return { q: c.q + d, u: 0 }; },
-    where: function (c) {
-      return 'Pair ' + c.q + ': codewords A and B → 136 symbols per PCS lane' + (P.isAmPair(c.q) ? ' (first 12 = alignment marker)' : '');
-    } };
+  // tx_out position of codeword symbol i of codeword w (the inverse of P.laneSymbolId).
+  function dcOrder(w, i) { var kk = i >> 2; return 8 * kk + 2 * (i & 3) + (w ^ (kk & 1)); }
   function drawDistConcept(W) {
-    var q = cur.q, k = step, h = hot();
-    var am = P.isAmPair(q);
-    var g = dcGeo(W);
-    var x0 = g.x0, xE = g.xE, bw = g.bw, barH = g.barH;
-    var yA = g.yA, yB = g.yB, laneW = g.laneW, laneH = g.laneH, yLane = g.yLane;
-    var fill = dcFill(k);
-    // Per-lane: DC_AM AM symbols, DC_DATA data symbols, DC_PAR parity symbols.
-    var AM_SYM = DC_AM, DATA_SYM = DC_DATA, PAR_SYM = DC_PAR;
-    var amH_full = Math.round(AM_SYM * laneH / 136);
-    var dataH_full = Math.round(DATA_SYM * laneH / 136);
-
-    // Row labels.
-    label('in', 8, (yA + yB + barH) / 2, th.ink, 11, 'left', 700);
-    label('out', 8, yLane + laneH / 2, th.ink, 11, 'left', 700);
-    label('codeword A · 544 symbols', x0, yA - 11, th.a, 9, 'left', 600);
-    label('codeword B · 544 symbols', x0, yB + barH + 14, th.b, 9, 'left', 600);
-
-    // Input bars: A and B, AM region lane-coloured, data and parity as base colour.
-    box(x0, yA, bw, barH, th.a);
-    box(x0, yB, bw, barH, th.b);
+    var q = cur.q, k = step, h = hot(), am = P.isAmPair(q);
+    var x0 = 96, xE = W - 60, sw = (xE - x0) / DC_SYMS, bh = 12, ys = [52, 72];
+    var vw = 12, ch = 8, yOut = 150, hOut = DC_ROWS * ch;
+    function laneX(p) { return Math.round(x0 + (xE - x0) * (p + 0.5) / 8 - vw / 2); }
+    function fill(w, i) { return distFill(q, w, i); }
+    label('in: codewords A and B, 544 ten-bit symbols each; out: tx_out symbol 8k + p → PCS lane p →', x0, 18, th.ink, 11, 'left', 600);
+    // The two codewords, like the pre-FEC stream; dealt symbols fade while stepping.
+    [0, 1].forEach(function (w) {
+      var y = ys[w];
+      label('codeword ' + cwName(w), 8, y + bh / 2, th.ink, 11, 'left', 700);
+      for (var i = 0; i < DC_SYMS; i++) {
+        if (stepping && k > dcOrder(w, i)) ctx.globalAlpha = 0.28;
+        box(x0 + i * sw, y, sw + 0.5, bh, fill(w, i));
+        ctx.globalAlpha = 1;
+      }
+      for (var d = 1; d < DC_SYMS; d++) pfDash(x0 + d * sw, y, x0 + d * sw, y + bh);
+      label('⋯ ' + cwName(w) + '543', xE + 6, y + bh / 2, th.muted, 10);
+      for (var n = 0; n < DC_SYMS; n += 8) label(cwName(w) + n, x0 + (n + 0.5) * sw, w ? y + bh + 10 : y - 9, th.muted, 9, 'center');
+    });
+    // The 8 lane markers end at symbol 48 of each codeword; the pad and status field follow.
     if (am) {
-      for (var s = 0; s < 96; s++) {
-        var id2 = P.laneSymbolId(s % 8, Math.floor(s / 8));
-        box(x0 + s * bw / 544, id2.w ? yB : yA, bw / 544 + 0.5, barH, th.lanes[s % 8]);
-      }
+      var xm = x0 + 48 * sw;
+      ctx.strokeStyle = th.ink; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(xm, ys[0] - 2); ctx.lineTo(xm, ys[1] + bh + 2); ctx.stroke();
     }
-    ctx.strokeStyle = th.paper; ctx.globalAlpha = 0.25; ctx.lineWidth = 0.5; ctx.setLineDash([1, 2]);
-    for (var si = 1; si < 544; si++) {
-      var bxi = x0 + si * bw / 544;
-      ctx.beginPath(); ctx.moveTo(bxi, yA); ctx.lineTo(bxi, yA + barH); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(bxi, yB); ctx.lineTo(bxi, yB + barH); ctx.stroke();
-    }
-    ctx.setLineDash([]); ctx.globalAlpha = 1;
-    var parX = x0 + 514 * bw / 544;
-    ctx.strokeStyle = th.ink; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(parX, yA - 3); ctx.lineTo(parX, yB + barH + 3); ctx.stroke();
-    label('514', parX, yA - 5, th.muted, 8, 'center');
-    label('+30', parX + (xE - parX) / 2, yA - 5, th.muted, 8, 'center');
-
-    // 8 narrow vertical lane bars: lane colour for AM, gray for data, dark for parity.
-    var dataFill = mix(th.edge, th.paper, 0.15);
-    var parFill  = mix(th.edge, th.ink,   0.55);
+    // The PCS lanes: thin vertical bars like m_A and m_B, one lane symbol per dashed row.
     for (var p = 0; p < 8; p++) {
-      var lx = g.lx(p), lc = th.lanes[p];
-      box(lx + laneW / 2 - 4, yLane - 20, 8, 6, lc);
-      label('PCS ' + p, lx + laneW / 2, yLane - 7, th.ink, 8, 'center');
-      box(lx, yLane, laneW, laneH, null, th.rule);
-      // AM region.
-      var amDone = Math.round(Math.min(fill.am, AM_SYM) * laneH / 136);
-      if (amDone > 0) box(lx, yLane, laneW, amDone, am ? mix(lc, th.am, 0.5) : dataFill);
-      // Data region.
-      var dataDone = Math.round(fill.data * laneH / 136);
-      if (dataDone > 0) box(lx, yLane + amH_full, laneW, dataDone, dataFill);
-      // Parity region.
-      var parDone = Math.round(fill.parity * laneH / 136);
-      var parStart = Math.round((AM_SYM + DATA_SYM) * laneH / 136);
-      if (parDone > 0) box(lx, yLane + parStart, laneW, parDone, parFill);
-      // Symbol dividers.
-      ctx.strokeStyle = th.paper; ctx.globalAlpha = 0.2; ctx.lineWidth = 0.5; ctx.setLineDash([1, 2]);
-      for (var ri = 1; ri < 136; ri++) {
-        var riy = yLane + ri * laneH / 136;
-        ctx.beginPath(); ctx.moveTo(lx, riy); ctx.lineTo(lx + laneW, riy); ctx.stroke();
+      var x = laneX(p);
+      label('PCS ' + p, x + vw / 2, yOut - 14, th.ink, 11, 'center', 700);
+      box(x, yOut, vw, hOut, null, th.rule);
+      for (var r = 0; r < DC_ROWS; r++) {
+        var id = P.laneSymbolId(p, r);
+        if (!stepping || k > 8 * r + p) box(x, yOut + r * ch, vw, ch + 0.5, fill(id.w, id.i));
+        if (r % 4 === 0) label(cwName(id.w) + id.i, x + vw + 5, yOut + r * ch + ch / 2, th.muted, 9);
       }
-      ctx.setLineDash([]); ctx.globalAlpha = 1;
-      // Parity boundary tick.
-      var parTick = yLane + Math.round((AM_SYM + DATA_SYM) * laneH / 136);
-      ctx.strokeStyle = th.muted; ctx.lineWidth = 0.75;
-      ctx.beginPath(); ctx.moveTo(lx - 2, parTick); ctx.lineTo(lx + laneW + 2, parTick); ctx.stroke();
-      label('136', lx + laneW / 2, yLane + laneH + 11, th.muted, 8, 'center');
-      // Clicked symbol highlight.
-      if (distPick && distPick.p === p) {
-        var sy = yLane + distPick.sym * laneH / 136;
-        box(lx - 2, sy - 1, laneW + 4, Math.max(2, laneH / 136 + 2), null, th.ink, 1.5);
-      }
+      for (var r2 = 1; r2 < DC_ROWS; r2++) pfDash(x, yOut + r2 * ch, x + vw, yOut + r2 * ch);
+      label('⋮ 135', x + vw / 2, yOut + hOut + 12, th.muted, 10, 'center');
     }
-
-    // Bezier routes: colour by lane for AM, gray for data/parity.
-    function drawRoute(txOut, alpha, lw2) {
-      var lane = txOut % 8, laneSym = Math.floor(txOut / 8);
-      var id3 = P.laneSymbolId(lane, laneSym);
-      var srcY = id3.w ? yB + barH : yA + barH;
-      var srcX = x0 + (txOut + 0.5) * bw / 544;
-      var dstX = g.cx(lane);
-      var dstY = yLane + (laneSym + 0.5) * laneH / 136;
-      var midY = srcY + (dstY - srcY) * 0.5;
-      var col = (am && laneSym < AM_SYM) ? th.lanes[lane] : th.edge;
-      ctx.strokeStyle = col; ctx.lineWidth = lw2; ctx.globalAlpha = alpha;
-      ctx.beginPath(); ctx.moveTo(srcX, srcY);
-      ctx.bezierCurveTo(srcX, midY, dstX, midY, dstX, dstY);
-      ctx.stroke(); ctx.globalAlpha = 1;
+    // The route of the symbol just dealt, while stepping: tx_out s → lane s mod 8, row s >> 3.
+    if (h >= 0) {
+      var tp = h & 7, tr = h >> 3, tid = P.laneSymbolId(tp, tr), sy = ys[tid.w];
+      var cx = x0 + (tid.i + 0.5) * sw, tx = laneX(tp), ty = yOut + tr * ch + ch / 2, side = tx < cx ? tx + vw + 2 : tx - 2;
+      var dir = tx < cx ? 1 : -1;
+      ctx.strokeStyle = th.ink; ctx.fillStyle = th.ink; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(cx, sy + bh + 2);
+      ctx.bezierCurveTo(cx, ty, (cx + side) / 2, ty, side, ty); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(side, ty); ctx.lineTo(side + 7 * dir, ty - 4); ctx.lineTo(side + 7 * dir, ty + 4); ctx.closePath(); ctx.fill();
+      box(x0 + tid.i * sw - 1, sy - 2, sw + 2, bh + 4, null, th.ink, 2);
+      box(tx - 2, yOut + tr * ch - 2, vw + 4, ch + 4, null, th.ink, 2);
     }
-    // Ghost routes: one per lane per phase.
-    var ghostK = stepping ? k : DC_STEPS;
-    var ghostFill = dcFill(ghostK);
-    for (var gl = 0; gl < 8; gl++) {
-      if (ghostFill.am > 0) drawRoute(gl * 8, 0.2, 1);
-      if (ghostFill.data > 0) drawRoute((AM_SYM + 2) * 8 + gl, 0.15, 1);
-      if (ghostFill.parity > 0) drawRoute((AM_SYM + DATA_SYM + 2) * 8 + gl, 0.15, 1);
-    }
-    // Active route for the hot step.
-    var hotTx = dcStepToTxOut(h);
-    if (hotTx >= 0) {
-      drawRoute(hotTx, 1, 2);
-      var hid3 = P.laneSymbolId(hotTx % 8, Math.floor(hotTx / 8));
-      var hx2 = x0 + (hotTx + 0.5) * bw / 544 - 4;
-      box(hx2, hid3.w ? yB - 2 : yA - 2, 8, barH + 4, null, th.ink, 2);
-    }
-
-    // Tooltip for clicked lane symbol.
-    if (distPick) {
-      var dp = distPick, id4 = P.laneSymbolId(dp.p, dp.sym);
-      var cs = P.cwSymbol(q, id4.w, id4.i);
-      var ttX = g.lx(dp.p) + laneW + 8, ttY = yLane + dp.sym * laneH / 136 - 8;
-      var ttW = 168;
-      if (ttX + ttW > xE) ttX = g.lx(dp.p) - ttW - 8;
-      ttY = Math.max(yLane, Math.min(ttY, yLane + laneH - 52));
-      box(ttX, ttY, ttW, 50, th.paper, th.rule, 1);
-      box(ttX, ttY, ttW, 50, null, th.ink, 1);
-      label('PCS ' + dp.p + '  lane sym ' + dp.sym + ' of 136', ttX + 7, ttY + 13, th.muted, 9);
-      label(cwName(id4.w) + id4.i + ' = 0x' + P.hex(cs.value, 3), ttX + 7, ttY + 29, th.ink, 11, 'left', 700);
-      label((id4.i < P.CW_K ? 'message sym ' + id4.i : 'parity sym ' + (id4.i - P.CW_K)), ttX + 7, ttY + 43, th.muted, 9);
-    }
-
-    var yc = yLane + laneH + 24;
-    label('tx_out symbol s → PCS lane s mod 8; each lane gets 136 symbols per codeword pair (119.2.4.8)', x0, yc, th.ink, 10, 'left', 600);
-    label((am ? 'lane colour = alignment marker · ' : '') + 'gray = data · dark = parity · click a lane symbol to inspect it', x0, yc + 16, th.muted, 10);
+    var yc = yOut + hOut + 36;
+    label('lane p, lane symbol k = codeword symbol 4k + ⌊p/2⌋; even lanes take A on even k, B on odd k, odd lanes the reverse (119.2.4.8)', x0, yc, th.ink, 10, 'left', 600);
+    label(am ? 'lane colour = that lane’s 120-bit marker (lane symbols 0–11), as in AM insertion · amber = pad and status · grey = data'
+      : 'grey = data · dashed lines = 10-bit symbol boundaries', x0, yc + 18, th.muted, 10);
   }
 
   /* ---- symbol distribution: A and B on the left, 8 PCS lanes on the right ---- */
@@ -3591,12 +3484,11 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     function dest(w, i) { var kk = i >> 2; return { p: 2 * (i & 3) + (w ^ (kk & 1)), kk: kk }; }
     // tx_out order within the window: symbol 8c + p goes to lane p, column c.
     function order(p, c) { return 8 * c + p; }
-    function laneFill(p, i) { return i >= P.CW_K ? mix(th.lanes[p], th.ink, 0.45) : th.lanes[p]; }
     [0, 1].forEach(function (w) {
       var y = w ? yB : yA;
       label('codeword ' + cwName(w), 8, y + rh / 2, th.ink, 11, 'left', 700);
       for (var n = 0; n < 16; n++) {
-        var i = i0 + n, d = dest(w, i), o = order(d.p, d.kk - k0), x = x0 + n * lw, f = laneFill(d.p, i);
+        var i = i0 + n, d = dest(w, i), o = order(d.p, d.kk - k0), x = x0 + n * lw, f = distFill(q, w, i);
         if (stepping && k > o) ctx.globalAlpha = 0.28;
         box(x + 1, y, lw - 2, rh, f);
         var s = fit([cwName(w) + i, String(i), String(i % 100)], lw - 2, 10, 600);
@@ -3612,7 +3504,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       for (var c = 0; c < 4; c++) {
         var id = P.laneSymbolId(p, k0 + c), x = rx + c * rw, o = order(p, c);
         if (k <= o) { box(x + 1, y, rw - 2, rh, null, th.rule); continue; }
-        var cs = P.cwSymbol(q, id.w, id.i), f = laneFill(p, id.i);
+        var cs = P.cwSymbol(q, id.w, id.i), f = distFill(q, id.w, id.i);
         box(x + 1, y, rw - 2, rh, f);
         label(fit([cwName(id.w) + id.i + ' = ' + P.hex(cs.value, 3), cwName(id.w) + id.i], rw - 2, 10, 600), x + rw / 2, y + rh / 2, onFill(f), 10, 'center', 600);
         if (o === h) {
@@ -3627,8 +3519,8 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     }
     var yc = y0 + 8 * (rh + 6) + 6;
     label('tx_out symbol s goes to PCS lane s mod 8; lane p gets codeword symbol 4k + ⌊p/2⌋ of A or B at lane symbol k (119.2.4.8)', x0, yc, th.ink, 10, 'left', 600);
-    label(am ? 'these are the alignment-marker symbols: every lane receives its own 120-bit marker, 10 bits at a time'
-      : 'tile colour = destination lane; ' + (i0 + 15 >= P.CW_K ? 'darker = parity symbols' : 'the same codeword symbol index lands on lane 2(i mod 4) or the one after it'), x0, yc + 18, th.muted, 10);
+    label(am ? 'alignment-marker symbols: each lane receives its own 120-bit marker, 10 bits at a time, in that lane’s colour'
+      : 'grey = data' + (i0 + 15 >= P.CW_K ? ', darker grey = parity' : '') + ' · lane colour marks alignment-marker symbols, amber the pad and status', x0, yc + 18, th.muted, 10);
   }
 
   /* ---- AM insertion and PMA bit-mux ---- */
@@ -3778,68 +3670,207 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     }
   }
 
-  // The PCS lanes of one SerDes lane, bit by bit.
+  /* ---- PMA bit-mux, page 0: TX. The PCS lanes that share one SerDes lane, bit
+     by bit, then the SerDes lane itself; on PAM4 widths, the Gray-coded level of
+     each pair of bits. Prev / Next walk the SerDes lanes. The window straddles
+     the end of the alignment marker so marker, pad and data bits all show. ---- */
+  var MUX_BITS = 40;   // SerDes bit slots shown
+  var muxPhase = null; // RX page: demux start phase tried in the view, or null for the lab's own
+  function muxK() { return S.link.k; }
+  // First lane bit shown: half the window before the end of the 120-bit marker.
+  function muxL0() { return 120 - MUX_BITS / (2 * muxK()); }
+  // Bit lb of PCS lane p in pair q: its value and the colour of what it carries.
+  function muxBit(p, lb) {
+    var k = Math.floor(lb / 10), n = lb % 10, id = P.laneSymbolId(p, k), s = P.cwSymbol(cur.q, id.w, id.i), src = 'b';
+    if (s.parity) src = 'parity';
+    else for (var a = 0, i = 0; i < s.parts.length; i++) { a += s.parts[i].n; if (n < a) { src = s.parts[i].src; break; } }
+    var f = src === 'am' ? th.lanes[p] : src === 'pad' || src === 'sf' ? th.am
+      : src === 'parity' ? mix(th.edge, th.ink, 0.45) : mix(th.edge, th.lanes[p], 0.35);
+    return { v: s.bits[n], f: f };
+  }
+  function gray(a, b) { return a === '0' ? (b === '0' ? 0 : 1) : (b === '1' ? 2 : 3); }
+  function muxRate() { var w = P.WIDTHS[S.width]; return { w: w, tb: 1000 / w.gbps }; }
+  // Time ruler over the bit rows: one tick per SerDes bit, labelled in picoseconds.
+  function muxRuler(x0, bw, y) {
+    var tb = muxRate().tb;
+    ctx.strokeStyle = th.rule; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + MUX_BITS * bw, y); ctx.stroke();
+    for (var t = 0; t <= MUX_BITS; t++) {
+      ctx.beginPath(); ctx.moveTo(x0 + t * bw, y); ctx.lineTo(x0 + t * bw, y + (t % 8 ? 3 : 6)); ctx.stroke();
+      if (t % 8 === 0) label(Math.round(t * tb) + ' ps', x0 + t * bw, y - 7, th.muted, 9, t ? 'center' : 'left');
+    }
+    label('time →', 8, y, th.muted, 9);
+  }
+  // A short arrow from (x0, y0) down to (x1, y1), for the bit just moved.
+  function muxRoute(x0, y0, x1, y1) {
+    ctx.strokeStyle = th.ink; ctx.fillStyle = th.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.bezierCurveTo(x0, (y0 + y1) / 2, x1, (y0 + y1) / 2, x1, y1 - 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - 4, y1 - 7); ctx.lineTo(x1 + 4, y1 - 7); ctx.closePath(); ctx.fill();
+  }
+  // One row of a PCS lane's bits, each kk SerDes slots wide; faded once moved while stepping.
+  function muxLaneRow(p, y, x0, bw, kk, moved) {
+    for (var b = 0; b < MUX_BITS / kk; b++) {
+      var x = x0 + b * bw * kk, bi = muxBit(p, muxL0() + b);
+      if (moved(b)) ctx.globalAlpha = 0.28;
+      box(x + 1, y + 3, bw * kk - 2, 16, bi.f);
+      if (bw * kk > 12) label(bi.v, x + bw * kk / 2, y + 11, onFill(bi.f), 9, 'center');
+      ctx.globalAlpha = 1;
+    }
+  }
   function drawMux(W) {
-    var link = S.link, kk = link.k, x0 = 70, nb = 40, bw = (W - x0 - 16) / nb, rh = 22, y0 = 40, k = step;
-    var lanes = P.lanesOnSerdes(link, 0);
-    label(kk === 1 ? 'One PCS lane per SerDes lane: no multiplexing at 8 lanes' : kk + ' PCS lanes bit-interleaved onto SerDes 0 (' + P.WIDTHS[S.width].mod + ')',
-      x0, 16, th.ink, 11, 'left', 600);
+    var link = S.link, kk = muxK(), s = mod(cur.s, link.width), lanes = P.lanesOnSerdes(link, s), k = kk > 1 ? step : MUX_BITS, h = hot();
+    var x0 = 70, bw = (W - x0 - 16) / MUX_BITS, rh = 22, y0 = 56, r8 = muxRate(), pam = r8.w.mod === 'PAM4';
+    var names = lanes.map(function (l) { return l.pcs; }).join(kk > 2 ? ', ' : ' and ');
+    label(kk === 1 ? 'SerDes ' + s + ' carries PCS lane ' + names + ' alone: nothing to multiplex at 8 × NRZ'
+      : 'SerDes ' + s + ' carries PCS lanes ' + names + ', bit-interleaved · ' + S.width + ' × ' + r8.w.mod + ', ' + P.PRESETS[S.preset] + ' mapping', x0, 14, th.ink, 11, 'left', 600);
+    muxRuler(x0, bw, 38);
     lanes.forEach(function (l, r) {
       var y = y0 + r * rh;
-      box(4, y + 3, 10, rh - 6, th.lanes[l.pcs]);
-      label('PCS ' + l.pcs, 20, y + rh / 2, th.ink, 10, 'left', 600);
-      for (var b = 0; b < nb / kk; b++) {
-        var x = x0 + b * bw * kk, used = stepping && b * kk + r < k;
-        box(x + 1, y + 3, bw * kk - 2, rh - 6, used ? mix(th.lanes[l.pcs], th.paper, 0.7) : th.lanes[l.pcs]);
-        if (bw * kk > 14) label(laneBit(l.pcs, b), x + bw * kk / 2, y + rh / 2, used ? th.muted : th.paper, 9, 'center');
-      }
+      box(4, y + 6, 10, 10, th.lanes[l.pcs]);
+      label('PCS ' + l.pcs, 20, y + 11, th.ink, 10, 'left', 600);
+      muxLaneRow(l.pcs, y, x0, bw, kk, function (b) { return stepping && b * kk + r < k; });
     });
     var ys = y0 + kk * rh + 30;
-    label('SerDes 0', 8, ys + 14, th.ink, 10, 'left', 600);
-    for (var t = 0; t < nb; t++) {
+    label('SerDes ' + s, 8, ys + 14, th.ink, 10, 'left', 600);
+    for (var t = 0; t < MUX_BITS; t++) {
       var src = lanes[t % kk], x = x0 + t * bw;
       if (t >= k) { box(x + 1, ys, bw - 2, 28, null, th.rule); continue; }
-      box(x + 1, ys, bw - 2, 28, th.lanes[src.pcs]);
-      if (bw > 11) label(laneBit(src.pcs, Math.floor(t / kk)), x + bw / 2, ys + 14, th.paper, 9, 'center');
+      var bi = muxBit(src.pcs, muxL0() + Math.floor(t / kk));
+      box(x + 1, ys, bw - 2, 28, bi.f);
+      if (bw > 11) label(bi.v, x + bw / 2, ys + 14, onFill(bi.f), 9, 'center');
     }
-    if (kk > 1) {
-      for (var t2 = 0; t2 + 1 < Math.min(nb, k); t2 += 2) {
+    // The bit just moved: outlined at both ends, joined by an arrow.
+    if (h >= 0 && kk > 1) {
+      var hr = h % kk, hb = Math.floor(h / kk), hy = y0 + hr * rh, hx = x0 + hb * bw * kk;
+      box(hx - 1, hy + 2, bw * kk, 18, null, th.ink, 2);
+      box(x0 + h * bw - 1, ys - 1, bw + 1, 30, null, th.ink, 2);
+      muxRoute(hx + bw * kk / 2, hy + 20, x0 + (h + 0.5) * bw, ys - 2);
+    }
+    var yc = ys + 46;
+    if (pam) {
+      // Each pair {A, B}, A first, becomes one Gray-coded PAM4 level (120.5.7.1).
+      var yl = ys + 52, lh = 12;
+      for (var t2 = 0; t2 + 1 < Math.min(MUX_BITS, k); t2 += 2) {
         var xx = x0 + t2 * bw;
         ctx.strokeStyle = th.muted; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(xx + 2, ys + 32); ctx.lineTo(xx + 2, ys + 36); ctx.lineTo(xx + 2 * bw - 2, ys + 36); ctx.lineTo(xx + 2 * bw - 2, ys + 32); ctx.stroke();
       }
-      label('brackets = PAM4 symbols (2 bits each); each carries one bit from two PCS lanes', x0, ys + 52, th.muted, 10);
+      label('PAM4', 8, yl + 1.5 * lh - 6, th.ink, 10, 'left', 600);
+      label('level', 8, yl + 1.5 * lh + 8, th.muted, 9);
+      for (var L = 0; L < 4; L++) {
+        var gy = yl + (3 - L) * lh;
+        ctx.strokeStyle = th.rule; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+        ctx.beginPath(); ctx.moveTo(x0, gy); ctx.lineTo(x0 + MUX_BITS * bw, gy); ctx.stroke(); ctx.setLineDash([]);
+        label(String(L), x0 - 6, gy, th.muted, 9, 'right');
+      }
+      ctx.strokeStyle = th.ink; ctx.lineWidth = 2; ctx.beginPath();
+      var prev = null;
+      for (var j = 0; 2 * j + 1 < MUX_BITS && 2 * j + 2 <= k; j++) {
+        var a = lanes[(2 * j) % kk], bb = lanes[(2 * j + 1) % kk];
+        var lv = gray(muxBit(a.pcs, muxL0() + Math.floor(2 * j / kk)).v, muxBit(bb.pcs, muxL0() + Math.floor((2 * j + 1) / kk)).v);
+        var sx = x0 + 2 * j * bw, ly = yl + (3 - lv) * lh;
+        if (prev === null) ctx.moveTo(sx, ly); else ctx.lineTo(sx, ly);
+        ctx.lineTo(sx + 2 * bw, ly); prev = ly;
+        label(String(lv), sx + bw, ly - 6, th.ink, 9, 'center', 600);
+      }
+      ctx.stroke();
+      yc = yl + 3 * lh + 22;
+      label('PAM4 Gray code, bit A first: 00 → 0, 01 → 1, 11 → 2, 10 → 3 (120.5.7.1) · ' + r8.w.gbps + ' Gb/s sent at ' + r8.w.baud + ' GBd', x0, yc + 16, th.muted, 10);
     }
-    label('every bit of a PCS lane takes the same SerDes lane and the same slot; the PMA never looks inside the data', x0, ys + 70, th.muted, 10);
+    if (kk > 1) label('a lane’s next bit follows ' + kk + ' bits later on the same SerDes lane (120.5.2) · each PCS lane 26.5625 Gb/s, SerDes lane ' + r8.w.gbps + ' Gb/s', x0, yc, th.ink, 10, 'left', 600);
+    else label('8 × NRZ: one bit per symbol at 26.5625 GBd; the PMA passes each PCS lane through bit for bit', x0, yc, th.ink, 10, 'left', 600);
+    label('lane colour = the end of each lane’s 120-bit alignment marker · amber = pad · grey = data', x0, yc + (pam ? 32 : 16), th.muted, 10);
   }
-  // Bit b of PCS lane p, from lane symbol 16 on: past the 12-symbol marker and
-  // the pad/status symbols, so the bits shown are text data.
-  function laneBit(p, b) {
-    var k = 16 + Math.floor(b / 10), id = P.laneSymbolId(p, k);
-    return P.cwSymbol(cur.q, id.w, id.i).bits[b % 10];
+
+  /* ---- PMA bit-mux, page 1: RX demux. One received SerDes lane dealt bit by bit
+     onto its RX PMA lanes. The demux cannot tell where a PCS lane's bits start,
+     so its start phase decides which PCS lane comes out where (120.5.2: the PCS
+     lanes "may arrive in any sequence"). Phase cycles the start bit. ---- */
+  var MUX_RX = { title: 'PMA bit-mux · RX demux', stage: 5, rate: 10,
+    get steps() { return muxK() > 1 ? MUX_BITS : 0; },
+    nav: function (c, d) { muxPhase = null; return { q: c.q, s: mod(c.s + d, S.link.width) }; },
+    where: function (c) {
+      var r = mod(c.s, S.link.width), ph = muxRxPhase(r);
+      return 'Pair ' + c.q + ', RX SerDes ' + r + (muxK() > 1 ? ': demux phase ' + ph.p + (ph.tried ? ' (tried here; the lab uses ' + ph.lab + ')' : '') : '');
+    } };
+  // PCS lanes arriving on RX SerDes r, in the order they were sent.
+  function muxRxLanes(r) {
+    return S.link.lanes.filter(function (l) { return l.rxSerdes === r; }).sort(function (a, b) { return a.slot - b.slot; });
+  }
+  // The lab's demux phase on RX SerDes r, and the one in force in this view.
+  function muxRxPhase(r) {
+    var kk = muxK(), l = muxRxLanes(r)[0], lab = mod(l.rxPma - r * kk - l.slot, kk);
+    var p = muxPhase === null ? lab : muxPhase;
+    return { lab: lab, p: p, tried: muxPhase !== null && muxPhase !== lab };
+  }
+  function drawDemux(W) {
+    var kk = muxK(), r = mod(cur.s, S.link.width), lanes = muxRxLanes(r), ph = muxRxPhase(r).p, k = kk > 1 ? step : MUX_BITS, h = hot();
+    var x0 = 70, bw = (W - x0 - 16) / MUX_BITS, rh = 22, ys = 56, r8 = muxRate();
+    label(kk === 1 ? 'RX SerDes ' + r + ' carries one PCS lane: the demux passes it straight through'
+      : 'RX SerDes ' + r + ': ' + kk + ' PCS lanes arrive bit-interleaved; the demux deals bit t to output (t + ' + ph + ') mod ' + kk, x0, 14, th.ink, 11, 'left', 600);
+    muxRuler(x0, bw, 38);
+    label('SerDes ' + r, 8, ys + 14, th.ink, 10, 'left', 600);
+    for (var t = 0; t < MUX_BITS; t++) {
+      var src = lanes[t % kk], x = x0 + t * bw, bi = muxBit(src.pcs, muxL0() + Math.floor(t / kk));
+      if (stepping && t < k) ctx.globalAlpha = 0.28;
+      box(x + 1, ys, bw - 2, 28, bi.f);
+      if (bw > 11) label(bi.v, x + bw / 2, ys + 14, onFill(bi.f), 9, 'center');
+      ctx.globalAlpha = 1;
+    }
+    // Output j gets the bits of the lane in sent slot (j - phase) mod kk.
+    var yo = ys + 64;
+    for (var j = 0; j < kk; j++) {
+      var y = yo + j * rh, sl = mod(j - ph, kk), l = lanes[sl], pma = r * kk + j;
+      label('RX PMA ' + pma, 8, y + 11, th.ink, 10, 'left', 600);
+      for (var b = 0; b < MUX_BITS / kk; b++) {
+        var xb = x0 + b * bw * kk, tt = b * kk + sl;
+        if (stepping && tt >= k) { box(xb + 1, y + 3, bw * kk - 2, 16, null, th.rule); continue; }
+        var bj = muxBit(l.pcs, muxL0() + b);
+        box(xb + 1, y + 3, bw * kk - 2, 16, bj.f);
+        if (bw * kk > 12) label(bj.v, xb + bw * kk / 2, y + 11, onFill(bj.f), 9, 'center');
+      }
+    }
+    if (h >= 0 && kk > 1) {
+      var hs = h % kk, hj = mod(hs + ph, kk), hb = Math.floor(h / kk), hy = yo + hj * rh, hx = x0 + hb * bw * kk;
+      box(x0 + h * bw - 1, ys - 1, bw + 1, 30, null, th.ink, 2);
+      box(hx - 1, hy + 2, bw * kk, 18, null, th.ink, 2);
+      muxRoute(x0 + (h + 0.5) * bw, ys + 30, hx + bw * kk / 2, hy + 2);
+    }
+    var yc = yo + kk * rh + 22;
+    var map = [];
+    for (var j2 = 0; j2 < kk; j2++) map.push('RX PMA ' + (r * kk + j2) + ' ← PCS ' + lanes[mod(j2 - ph, kk)].pcs);
+    label(map.join(' · ') + (kk > 1 ? (ph ? ' · out of order' : ' · in the order sent') : ''), x0, yc, th.ink, 10, 'left', 600);
+    label(kk > 1 ? 'the order depends on when the demux locks · Phase tries another start bit · the PCS reorders lanes by their markers'
+      : 'with one PCS lane per SerDes lane there is nothing to demultiplex; lane order can still change if SerDes lanes are swapped', x0, yc + 16, th.muted, 10);
+    label('lane colour = the end of each lane’s 120-bit alignment marker · amber = pad · grey = data', x0, yc + 32, th.muted, 10);
+  }
+  function muxHeight() {
+    var kk = muxK();
+    return page ? 184 + 22 * kk : 86 + 22 * kk + (P.WIDTHS[S.width].mod === 'PAM4' ? 152 : 76);
   }
 
   var DRAW = { b66: drawB66, b257: drawB257, am: drawAm,
-    prefec: function (W) { (pfPage ? drawPrefec : drawPrefecConcept)(W); },
+    prefec: function (W) { (page ? drawPrefec : drawPrefecConcept)(W); },
     rs: drawRs,
-    dist: function (W) { (distPage ? drawDist : drawDistConcept)(W); },
-    mux: drawMux };
-  // The view in force: pre-FEC and dist each have an overview page with their own steps and size.
-  function view() {
-    if (mode === 'prefec' && !pfPage) return PF_CONCEPT;
-    if (mode === 'dist' && !distPage) return DIST_CONCEPT;
-    return VIEWS[mode];
-  }
-  function height() { return mode === 'mux' ? 152 + 22 * S.link.k : view().h; }
+    dist: function (W) { (page ? drawDist : drawDistConcept)(W); },
+    mux: function (W) { (page ? drawDemux : drawMux)(W); } };
+  // Views with two pages: the view in force on each, and the page names.
+  var PAGES = {
+    prefec: { v: function () { return page ? VIEWS.prefec : PF_CONCEPT; }, names: ['Overview', 'Distribution details'] },
+    dist: { v: function () { return page ? VIEWS.dist : DIST_CONCEPT; }, names: ['Overview', 'Detail'] },
+    mux: { v: function () { return page ? MUX_RX : VIEWS.mux; }, names: ['TX bit-mux', 'RX demux'] }
+  };
+  // The view in force: a two-page view has its own steps and size on each page.
+  function view() { return PAGES[mode] ? PAGES[mode].v() : VIEWS[mode]; }
+  function height() { return mode === 'mux' ? muxHeight() : view().h; }
 
   // Page arrows for views that have two pages.
   function pageArrows() {
     ['opv-pg-l', 'opv-pg-r'].forEach(function (id) {
       var b = $(id);
       if (!b) return;
-      var show = mode === 'prefec' || mode === 'dist';
-      b.hidden = !show;
-      var onPage1 = mode === 'prefec' ? pfPage : distPage;
-      var t = onPage1 ? 'Back to the overview' : 'Show distribution details';
+      b.hidden = !PAGES[mode];
+      if (b.hidden) return;
+      var t = 'Show ' + PAGES[mode].names[1 - page].toLowerCase();
       b.title = t; b.setAttribute('aria-label', t);
     });
   }
@@ -3867,12 +3898,14 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   function $(id) { return document.getElementById(id); }
   function sync() {
     var v = view(), N = v.steps;
-    if (mode === 'prefec' || mode === 'dist') $('opv-title').textContent = v.title;
-    var pageSuffix = '';
-    if (mode === 'prefec') pageSuffix = ' · page ' + (pfPage ? '2: Distribution details' : '1: Overview');
-    if (mode === 'dist') pageSuffix = ' · page ' + (distPage ? '2: Detail' : '1: Overview');
-    $('opv-where').textContent = v.where(cur) + pageSuffix;
+    if (PAGES[mode]) $('opv-title').textContent = v.title;
+    $('opv-note').textContent = NOTES[mode === 'mux' && page ? 'muxRx' : mode];
+    $('opv-where').textContent = v.where(cur) + (PAGES[mode] ? ' · page ' + (page + 1) + ': ' + PAGES[mode].names[page] : '');
     $('opv-prev').hidden = $('opv-next').hidden = !v.nav;
+    // Nothing to step through (8 × NRZ bit-mux): the view is shown complete.
+    $('opv-step').hidden = $('opv-play').hidden = $('opv-count').hidden = !N;
+    var ph = $('opv-phase');
+    if (ph) ph.hidden = !(mode === 'mux' && page && muxK() > 1);
     $('opv-play').textContent = anim ? 'Pause' : step < N ? 'Play' : 'Animate';
     $('opv-count').textContent = stepping ? Math.min(step, N) + ' / ' + N : '';
     cv.setAttribute('aria-label', v.title + '. ' + v.where(cur) + '.');
@@ -3956,7 +3989,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     if (!dlg || !VIEWS[m]) return;
     if (P.inspectorOpen && P.inspectorOpen()) P.closeInspector();
     if (S.playing) P.setPlaying(false);
-    mode = m; cur = VIEWS[m].at(); pick = -1; pfPage = 0; distPage = 0;
+    mode = m; cur = VIEWS[m].at(); pick = -1; page = 0; muxPhase = null;
     step = view().steps; anim = stepping = false; acc = 0;
     $('opv-title').textContent = view().title;
     $('opv-note').textContent = NOTES[m];
@@ -3967,7 +4000,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   P.viewOpen = function () { return !!mode; };
 
   function playToggle() {
-    if (!mode) return;
+    if (!mode || !view().steps) return;
     var N = view().steps;
     if (anim) anim = false;
     else { if (step >= N) step = 0; anim = stepping = true; acc = 0; }
@@ -3976,15 +4009,16 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   P.viewStep = function () {
     if (!mode) return false;
     var N = view().steps;
+    if (!N) return true;
     anim = false; stepping = true;
     step = step >= N ? 1 : step + 1;
     sync();
     return true;
   };
-  // Pre-FEC and dist views have two pages; flip between them.
+  // Two-page views: flip between the pages.
   function flipPage() {
-    if (mode === 'prefec') pfPage = 1 - pfPage;
-    else if (mode === 'dist') distPage = 1 - distPage;
+    if (!PAGES[mode]) return;
+    page = 1 - page;
     step = view().steps; anim = stepping = false; acc = 0;
     size(); sync();
   }
@@ -4028,26 +4062,20 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       else if (a === 'pk-prev' || a === 'pk-next') { pickNav(a === 'pk-next' ? 1 : -1); var f = dlg.querySelector('[data-act="' + a + '"]'); if (f) f.focus(); }
       else if (a === 'pk-clear') { pick = -1; sync(); }
       else if (a === 'page') flipPage();
+      else if (a === 'phase') { muxPhase = (muxRxPhase(mod(cur.s, S.link.width)).p + 1) % muxK(); step = view().steps; anim = stepping = false; sync(); }
     });
     // AM view: click a slot tile to see what AM insertion did to it.
-    // Dist overview: click a lane symbol to inspect it.
     function canvasPoint(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
     cv.addEventListener('click', function (e) {
       if (mode === 'am') {
         var p = canvasPoint(e), s = amHit(p.x, p.y);
         if (s < 0) return;
         pick = s === pick ? -1 : s; sync();
-      } else if (mode === 'dist' && !distPage) {
-        var pt = canvasPoint(e), hit = dcHit(pt.x, pt.y);
-        if (!hit) { distPick = null; dirty = true; draw(); return; }
-        distPick = (distPick && distPick.p === hit.p && distPick.sym === hit.sym) ? null : hit;
-        dirty = true; draw();
       }
     });
     cv.addEventListener('mousemove', function (e) {
       var p = canvasPoint(e);
       if (mode === 'am') cv.style.cursor = amHit(p.x, p.y) >= 0 ? 'pointer' : '';
-      else if (mode === 'dist' && !distPage) cv.style.cursor = dcHit(p.x, p.y) ? 'pointer' : '';
       else cv.style.cursor = '';
     });
     dlg.addEventListener('keydown', function (e) {
@@ -4059,7 +4087,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     // The close event is queued; a view reopened in the meantime must survive it.
     dlg.addEventListener('close', function () { if (!dlg.open) { mode = null; cur = null; anim = stepping = false; } });
     new ResizeObserver(function () { if (mode) size(); }).observe($('opv-wrap'));
-    P.on(function (what) { if (mode && (what === 'link' || what === 'payload')) { if (mode === 'mux') size(); sync(); } });
+    P.on(function (what) { if (mode && (what === 'link' || what === 'payload')) { if (what === 'link') muxPhase = null; if (mode === 'mux') { step = view().steps; size(); } sync(); } });
   };
 })(globalThis.PCS = globalThis.PCS || {});
 
