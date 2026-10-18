@@ -2939,7 +2939,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
         return 'AM insertion ' + c.q / P.AM_PAIRS + ': 4 AM blocks, then 257-bit blocks ' + b + '–' + (b + 2 * P.PAIR_SLOTS - P.AM_SLOTS - 1) + ' in slots 4–79';
       } },
     // PF_SYMS stream symbols per window: the most that fit on one row with readable bits.
-    prefec: { title: 'Pre-FEC distribution · Distribution details', stage: 3, steps: PF_SYMS, rate: 3, h: 376,
+    prefec: { title: 'Pre-FEC distribution · Distribution details', stage: 3, steps: PF_SYMS, rate: 3, h: 330,
       at: function () {
         var p = pairAt(boxMid('prefec')), j = Math.floor(p.f * 1028) - PF_SYMS / 2;
         return { q: p.q, j: Math.max(0, Math.min(PF_LAST, j - mod(j, 2))) };
@@ -3173,7 +3173,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     return th.am;
   }
   // A 10-bit symbol: a codeword-coloured name bar, its bits, and what they hold.
-  function symTile(x, y, w, q, j, name, fade) {
+  function symTile(x, y, w, q, j, name, fade, bare) {
     var w2 = j & 1, bar = w2 ? th.b : th.a, cw = w / 10, b0 = 10 * j;
     if (fade) ctx.globalAlpha = 0.28;
     box(x, y, w, 16, bar);
@@ -3184,6 +3184,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       if (cw > 8) label(String(P.pairBit(q, b0 + n).v), x + n * cw + cw / 2, y + 27, onFill(f), 9, 'center');
     }
     // What the bits hold: a character, a header bit, or AM bits, centred on its run.
+    // A bare tile keeps only the run dividers.
     var n0 = 0;
     while (n0 < 10) {
       var s = P.pairBit(q, b0 + n0), n1 = n0 + 1;
@@ -3194,7 +3195,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
         n1++;
       }
       var txt = s.src === 'b' ? glyph(P.byteAt(s.idx)) : s.src === 'h' ? 'h' : s.src === 'am' ? (n1 - n0 > 3 ? 'am' + s.lane : '') : '';
-      if (txt) label(txt, x + (n0 + n1) / 2 * cw, y + 47, th.ink2, 11, 'center', 600);
+      if (txt && !bare) label(txt, x + (n0 + n1) / 2 * cw, y + 47, th.ink2, 11, 'center', 600);
       if (n0 > 0) box(x + n0 * cw - 0.5, y + 17, 1.5, 20, th.paper);
       n0 = n1;
     }
@@ -3273,34 +3274,53 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
      Stream horizontal at top, m_A and m_B below. ---- */
   function drawPrefec(W) {
     var q = cur.q, j0 = cur.j, k = step, h = hot(), N = PF_SYMS;
-    var x0 = 70, g = 6, sw = (W - 16 - x0 - (N - 1) * g) / N, th1 = 52;
-    var yS = 40, yA = 152, yB = 252;
-    label('in: the bit stream tx_scrambled_am, 10 bits per symbol, bit 0 first →', x0, 16, th.ink, 11, 'left', 600);
+    var x0 = 70, sw = (W - 16 - x0) / N, th1 = 52, oh = 37;
+    var yLoc = 12, yS = 54, yA = 160, yB = 236;
+    // Where this window sits in the pair's 1028 symbols: the overview bar, shrunk.
+    var lx0 = x0 + 22, lw = W - 16 - 44 - lx0;
+    box(lx0, yLoc - 2, lw, 4, mix(th.edge, th.paper, 0.55));
+    box(lx0 + j0 * lw / 1028, yLoc - 5, Math.max(3, N * lw / 1028), 10, th.ink);
+    label('s0', lx0 - 4, yLoc, th.muted, 9, 'right');
+    label('s1027', lx0 + lw + 4, yLoc, th.muted, 9);
+    label('in: tx_scrambled_am, 10 bits per symbol, bit 0 first →', x0, 34, th.ink, 11, 'left', 600);
     label('stream', 8, yS + 27, th.ink, 11, 'left', 700);
-    label('m_A', 8, yA + 27, th.ink, 11, 'left', 700);
-    label('m_B', 8, yB + 27, th.ink, 11, 'left', 700);
-    label('even s', 8, yA + 43, th.muted, 9);
-    label('odd s', 8, yB + 43, th.muted, 9);
+    label('m_A', 8, yA + 18, th.ink, 11, 'left', 700);
+    label('even s', 8, yA + 32, th.muted, 9);
+    label('m_B', 8, yB + 18, th.ink, 11, 'left', 700);
+    label('odd s', 8, yB + 32, th.muted, 9);
+    // Byte index of stream bit b, or -1 when it is not a payload byte.
+    function byteOf(b) { var s = P.pairBit(q, b); return s.src === 'b' ? s.idx : -1; }
     for (var t = 0; t < N; t++) {
-      var j = j0 + t, i = j >> 1, odd = j & 1, x = x0 + t * (sw + g), yd = odd ? yB : yA, cx = x + sw / 2;
+      var j = j0 + t, i = j >> 1, odd = j & 1, x = x0 + t * sw, yd = odd ? yB : yA, cx = x + sw / 2;
       var done = k > t, on = t === h;
+      // The stream is one strip: tiles touch, a faint dash marks each symbol boundary.
       symTile(x, yS, sw, q, j, 's' + j, done && stepping);
-      label(fit(['bits ' + 10 * j + '–' + (10 * j + 9), String(10 * j)], sw, 9), cx, yS + th1 + 10, th.muted, 9, 'center');
-      // The drop: faint once dealt, bold for the symbol being dealt now.
-      if (done) {
-        ctx.strokeStyle = on ? th.ink : mix(th.muted, th.paper, 0.45); ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = on ? 1.6 : 1;
-        ctx.beginPath(); ctx.moveTo(cx, yS + th1 + 18); ctx.lineTo(cx, yd - 4); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(cx, yd - 4); ctx.lineTo(cx - 4, yd + 3); ctx.lineTo(cx + 4, yd + 3); ctx.closePath(); ctx.fill();
+      if (t) pfDash(x, yS, x, yS + 37);
+      label(fit(['bits ' + 10 * j + '–' + (10 * j + 9), String(10 * j)], sw, 9), cx, yS + th1 + 14, th.muted, 9, 'center');
+      // A character cut by this boundary: a bracket under its bits on both sides.
+      var c = byteOf(10 * j + 9);
+      if (t < N - 1 && c >= 0 && byteOf(10 * j + 10) === c) {
+        var n0 = 9; while (n0 > 0 && byteOf(10 * j + n0 - 1) === c) n0--;
+        var n1 = 10; while (n1 < 19 && byteOf(10 * j + n1 + 1) === c) n1++;
+        var bx0 = x + n0 * sw / 10 + 1, bx1 = x + (n1 + 1) * sw / 10 - 1, by = yS + th1 + 2;
+        ctx.strokeStyle = th.ink2; ctx.lineWidth = 1.2; ctx.beginPath();
+        ctx.moveTo(bx0, by - 3); ctx.lineTo(bx0, by); ctx.lineTo(bx1, by); ctx.lineTo(bx1, by - 3); ctx.stroke();
       }
-      if (done) symTile(x, yd, sw, q, j, (odd ? 'B' : 'A') + i, false);
-      else box(x, yd, sw, 37, null, th.rule);
-      label(fit([(odd ? 'm_B' : 'm_A') + '<' + (513 - i) + '>', String(513 - i)], sw, 9), cx, yd + th1 + 10, th.muted, 9, 'center');
-      if (on) { box(x - 2, yS - 2, sw + 4, 41, null, th.ink, 2); box(x - 2, yd - 2, sw + 4, 41, null, th.ink, 2); }
+      // The drop, straight down: faint once dealt, bold for the symbol being dealt now.
+      if (done) {
+        ctx.strokeStyle = on ? th.ink : mix(odd ? th.b : th.a, th.paper, 0.3); ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = on ? 1.6 : 1;
+        ctx.beginPath(); ctx.moveTo(cx, yS + th1 + 22); ctx.lineTo(cx, yd - 6); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx, yd - 1); ctx.lineTo(cx - 4, yd - 8); ctx.lineTo(cx + 4, yd - 8); ctx.closePath(); ctx.fill();
+      }
+      // Output tile: name, hex and bits; the characters are already read off the stream above.
+      if (done) symTile(x, yd, sw, q, j, (odd ? 'B' : 'A') + i, false, true);
+      else box(x, yd, sw, oh, null, th.rule);
+      if (on) { box(x - 2, yS - 2, sw + 4, 41, null, th.ink, 2); box(x - 2, yd - 2, sw + 4, oh + 4, null, th.ink, 2); }
     }
-    var yc = yB + th1 + 30;
-    label('round robin, 10 bits at a time: m_A<513−i> = stream bits 20i…20i+9, m_B<513−i> = bits 20i+10…20i+19 (119.2.4.5)', x0, yc, th.ink, 10, 'left', 600);
-    label('A_i / B_i = the i-th symbol of each message in sending order; m<513−i> is the same symbol as a polynomial coefficient', x0, yc + 18, th.muted, 10);
-    label('bit shading changes at each character boundary; ' + (P.isAmPair(q) && j0 < 102 ? 'lane colours = AM bits; ' : '') + 'dark = 257-bit block header', x0, yc + 34, th.muted, 10);
+    var yc = yB + oh + 26;
+    label('A_i = stream symbol 2i, B_i = symbol 2i+1, 10 bits each, unchanged (119.2.4.5)', x0, yc, th.ink, 10, 'left', 600);
+    label('bracket = a character split between A and B' + (P.isAmPair(q) && j0 < 102 ? ' · lane colours = AM bits' : '') +
+      ' · dark bit = 257-bit block header', x0, yc + 16, th.muted, 10);
   }
 
   /* ---- RS(544,514): 514 message symbols in, the same 514 + 30 parity out ---- */
