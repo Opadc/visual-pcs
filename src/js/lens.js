@@ -11,7 +11,8 @@
      prefec pre-FEC distribution: 10-bit stream symbols dealt to m_A and m_B
      rs     RS(544,514): 514 message symbols each, then 30 parity symbols appended
      dist   symbol distribution: codewords A and B dealt onto 8 PCS lanes
-     mux    PMA bit-mux: PCS lane bits interleaved onto SerDes lanes */
+     mux    PMA bit-mux: PCS lane bits interleaved onto SerDes lanes
+     demux  RX PMA demux: a received SerDes lane dealt back onto RX PMA lanes */
 (function (P) {
   'use strict';
   var S = P.state, dlg, cv, ctx, dpr = 1, mode = null, cur = null;
@@ -116,7 +117,7 @@
       'Each lane ends up with 136 symbols per codeword pair, half from each codeword. Tile colour is the lane a symbol goes to.',
     mux: 'The PMA interleaves the bits of the PCS lanes that share a SerDes lane, one bit from each in turn; on PAM4 lanes each pair of bits becomes one of four levels. ' +
       'Prev / Next walk the SerDes lanes; change SerDes lanes or the mapping in the toolbar to see 1, 2 or 4 PCS lanes per SerDes lane.',
-    muxRx: 'On receive, the PMA demultiplexes each SerDes lane back into PCS lanes. It only sees a stream of bits, so the PCS lanes may come out in any order (120.5.2). ' +
+    demux: 'On receive, the PMA demultiplexes each SerDes lane back into PCS lanes. It only sees a stream of bits, so the PCS lanes may come out in any order (120.5.2). ' +
       'That is why every PCS lane carries its own alignment marker: the PCS reads them to put the lanes back in order.'
   };
 
@@ -893,12 +894,13 @@
     label('lane colour = the end of each lane’s 120-bit alignment marker · amber = pad · grey = data', x0, yc + (pam ? 32 : 16), th.muted, 10);
   }
 
-  /* ---- PMA bit-mux, page 1: RX demux. One received SerDes lane dealt bit by bit
+  /* ---- RX PMA demux. One received SerDes lane dealt bit by bit
      onto its RX PMA lanes. The demux cannot tell where a PCS lane's bits start,
      so its start phase decides which PCS lane comes out where (120.5.2: the PCS
      lanes "may arrive in any sequence"). Phase cycles the start bit. ---- */
-  var MUX_RX = { title: 'PMA bit-mux · RX demux', stage: 5, rate: 10,
+  var MUX_RX = { title: 'RX PMA demux', stage: 7, rate: 10,
     get steps() { return muxK() > 1 ? MUX_BITS : 0; },
+    at: function () { return { q: pairAt((P.X.demux[0] + P.X.demux[1]) / 2).q, s: 0 }; },
     nav: function (c, d) { muxPhase = null; return { q: c.q, s: mod(c.s + d, S.link.width) }; },
     where: function (c) {
       var r = mod(c.s, S.link.width), ph = muxRxPhase(r);
@@ -955,25 +957,25 @@
       : 'with one PCS lane per SerDes lane there is nothing to demultiplex; lane order can still change if SerDes lanes are swapped', x0, yc + 16, th.muted, 10);
     label('lane colour = the end of each lane’s 120-bit alignment marker · amber = pad · grey = data', x0, yc + 32, th.muted, 10);
   }
-  function muxHeight() {
+  VIEWS.demux = MUX_RX;
+  function muxHeight(rx) {
     var kk = muxK();
-    return page ? 184 + 22 * kk : 86 + 22 * kk + (P.WIDTHS[S.width].mod === 'PAM4' ? 152 : 76);
+    return rx ? 184 + 22 * kk : 86 + 22 * kk + (P.WIDTHS[S.width].mod === 'PAM4' ? 152 : 76);
   }
 
   var DRAW = { b66: drawB66, b257: drawB257, am: drawAm,
     prefec: function (W) { (page ? drawPrefec : drawPrefecConcept)(W); },
     rs: drawRs,
     dist: function (W) { (page ? drawDist : drawDistConcept)(W); },
-    mux: function (W) { (page ? drawDemux : drawMux)(W); } };
+    mux: drawMux, demux: drawDemux };
   // Views with two pages: the view in force on each, and the page names.
   var PAGES = {
     prefec: { v: function () { return page ? VIEWS.prefec : PF_CONCEPT; }, names: ['Overview', 'Distribution details'] },
-    dist: { v: function () { return page ? VIEWS.dist : DIST_CONCEPT; }, names: ['Overview', 'Detail'] },
-    mux: { v: function () { return page ? MUX_RX : VIEWS.mux; }, names: ['TX bit-mux', 'RX demux'] }
+    dist: { v: function () { return page ? VIEWS.dist : DIST_CONCEPT; }, names: ['Overview', 'Detail'] }
   };
   // The view in force: a two-page view has its own steps and size on each page.
   function view() { return PAGES[mode] ? PAGES[mode].v() : VIEWS[mode]; }
-  function height() { return mode === 'mux' ? muxHeight() : view().h; }
+  function height() { return mode === 'mux' || mode === 'demux' ? muxHeight(mode === 'demux') : view().h; }
 
   // Page arrows for views that have two pages.
   function pageArrows() {
@@ -1011,13 +1013,12 @@
   function sync() {
     var v = view(), N = v.steps;
     if (PAGES[mode]) $('opv-title').textContent = v.title;
-    $('opv-note').textContent = NOTES[mode === 'mux' && page ? 'muxRx' : mode];
     $('opv-where').textContent = v.where(cur) + (PAGES[mode] ? ' · page ' + (page + 1) + ': ' + PAGES[mode].names[page] : '');
     $('opv-prev').hidden = $('opv-next').hidden = !v.nav;
     // Nothing to step through (8 × NRZ bit-mux): the view is shown complete.
     $('opv-step').hidden = $('opv-play').hidden = $('opv-count').hidden = !N;
     var ph = $('opv-phase');
-    if (ph) ph.hidden = !(mode === 'mux' && page && muxK() > 1);
+    if (ph) ph.hidden = !(mode === 'demux' && muxK() > 1);
     $('opv-play').textContent = anim ? 'Pause' : step < N ? 'Play' : 'Animate';
     $('opv-count').textContent = stepping ? Math.min(step, N) + ' / ' + N : '';
     cv.setAttribute('aria-label', v.title + '. ' + v.where(cur) + '.');
@@ -1199,6 +1200,6 @@
     // The close event is queued; a view reopened in the meantime must survive it.
     dlg.addEventListener('close', function () { if (!dlg.open) { mode = null; cur = null; anim = stepping = false; } });
     new ResizeObserver(function () { if (mode) size(); }).observe($('opv-wrap'));
-    P.on(function (what) { if (mode && (what === 'link' || what === 'payload')) { if (what === 'link') muxPhase = null; if (mode === 'mux') { step = view().steps; size(); } sync(); } });
+    P.on(function (what) { if (mode && (what === 'link' || what === 'payload')) { if (what === 'link') muxPhase = null; if (mode === 'mux' || mode === 'demux') { step = view().steps; size(); } sync(); } });
   };
 })(globalThis.PCS = globalThis.PCS || {});
