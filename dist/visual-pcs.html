@@ -3352,13 +3352,24 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       label('514, unchanged', rx + 3 * tw, y + th1 + 12, th.muted, 10, 'center');
       label('+ 30 parity, new', px + 5 * pw, y + th1 + 12, k ? th.ink : th.muted, 10, 'center', 600);
     });
-    // Length to scale: the output is the input with 30 symbols appended.
-    var yb = y0 + 2 * th1 + 64, bw = W - 16 - x0, m = bw * 514 / 544;
-    label('in', 8, yb + 6, th.muted, 10); box(x0, yb, m, 12, th.a);
-    label('out', 8, yb + 24, th.muted, 10); box(x0, yb + 18, m, 12, th.a); box(x0 + m, yb + 18, (bw - m) * Math.min(1, k / 30), 12, th.ink);
-    box(x0 + m, yb + 18, bw - m, 12, null, th.rule);
-    label('to scale: the first 514 symbols out are the input, bit for bit; only the last 30 are new', x0, yb + 48, th.ink, 10, 'left', 600);
-    label((P.isAmPair(q) ? 'amber = symbols holding the AM group; ' : '') + 'dark = parity, hex values shown', x0, yb + 66, th.muted, 10);
+    // Length to scale: two messages in, two codewords out, 30 parity symbols appended to each.
+    var yb = y0 + 2 * th1 + 64, bw = W - 16 - x0, barH = 12, gap = 4;
+    var hw = (bw - gap) / 2, pm = hw * 514 / 544;
+    label('in', 8, yb + barH / 2, th.ink, 11, 'left', 600);
+    label('out', 8, yb + barH + gap + barH / 2, th.ink, 11, 'left', 600);
+    [0, 1].forEach(function (w) {
+      var bx = x0 + w * (hw + gap), c = w ? th.b : th.a;
+      label('m_' + cwName(w), bx + hw / 2, yb - 11, c, 9, 'center', 600);
+      // in: 514 message symbols
+      box(bx, yb, pm, barH, c);
+      box(bx + pm, yb, hw - pm, barH, null, th.rule);
+      // out: 514 message symbols (unchanged) + up to 30 parity (animated)
+      box(bx, yb + barH + gap, pm, barH, c);
+      box(bx + pm, yb + barH + gap, (hw - pm) * Math.min(1, k / 30), barH, th.ink);
+      box(bx + pm, yb + barH + gap, hw - pm, barH, null, th.rule);
+    });
+    label('to scale: 514 message symbols in each codeword pass through unchanged; only the 30 parity symbols are new', x0, yb + 2 * barH + gap + 16, th.ink, 10, 'left', 600);
+    label((P.isAmPair(q) ? 'amber = symbols holding the AM group; ' : '') + 'dark = parity, hex values shown', x0, yb + 2 * barH + gap + 34, th.muted, 10);
     label('parity = remainder of m(x)·x³⁰ ÷ g(x), g(x) = (x−α⁰)(x−α¹)…(x−α²⁹) over GF(2¹⁰) (Clause 91)', x0, yb + 84, th.muted, 10);
   }
 
