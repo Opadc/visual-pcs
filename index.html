@@ -2899,6 +2899,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   var S = P.state, dlg, cv, ctx, dpr = 1, mode = null, cur = null;
   var pick = -1;   // AM view: the clicked slot 0-79, or -1
   var pfPage = 0;  // pre-FEC view: 0 = overview, 1 = the actual bits
+  var distPage = 0; // symbol dist view: 0 = overview, 1 = the detail
   var step = 0, acc = 0, anim = false, stepping = false, dirty = true;
   var UPAIR = P.UNITS_PER_PAIR * P.GAP, U257 = UPAIR / P.PAIR_SLOTS, U66 = U257 / 4;
 
@@ -3380,6 +3381,119 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     label('parity = remainder of m(x)·x³⁰ ÷ g(x), g(x) = (x−α⁰)(x−α¹)…(x−α²⁹) over GF(2¹⁰) (Clause 91)', x0, yb + 84, th.muted, 10);
   }
 
+  /* ---- symbol distribution: overview page 0 ---- */
+  var DIST_CON = 136;   // animation steps: all 136 lane symbols of a pair
+  var DIST_CONCEPT = { title: 'Symbol distribution · Overview', steps: DIST_CON, rate: 16, h: 390,
+    nav: function (c, d) { return { q: c.q + d, u: 0 }; },
+    where: function (c) {
+      return 'Pair ' + c.q + ': codewords A and B → 136 symbols per PCS lane' + (P.isAmPair(c.q) ? ' (first 12 = alignment marker)' : '');
+    } };
+  function drawDistConcept(W) {
+    var q = cur.q, k = step, h = hot();
+    var am = P.isAmPair(q);
+    // Layout: two thin input bars, then 8 vertical lane bars spread across the full width.
+    var x0 = 96, xE = W - 16, bw = xE - x0, barH = 12, barGap = 6;
+    var yA = 42, yB = yA + barH + barGap;       // input bars
+    var laneH = 200, yLane = yB + barH + 58;     // lane bars start
+    // Spread 8 lane bars evenly across bw with equal inter-bar gaps.
+    var laneW = Math.round((bw - 7 * 4) / 8);   // ~4px gap between lanes
+    var laneStep = laneW + Math.round((bw - 8 * laneW) / 7);
+    // Lane bar centre x.
+    function laneCx(p) { return x0 + p * laneStep + laneW / 2; }
+
+    // Row labels on the left.
+    label('in', 8, (yA + yB + barH) / 2, th.ink, 11, 'left', 700);
+    label('out', 8, yLane + laneH / 2, th.ink, 11, 'left', 700);
+
+    // Column labels: A over left half, B over right half of each bar.
+    label('codeword A · 544 symbols', x0, yA - 11, th.a, 9, 'left', 600);
+    label('codeword B · 544 symbols', x0, yB + barH + 11, th.b, 9, 'left', 600);
+
+    // Input bars.
+    box(x0, yA, bw, barH, th.a);
+    box(x0, yB, bw, barH, th.b);
+    // AM region: first 96 tx_out symbols. Each goes to A or B depending on laneSymbolId.
+    if (am) {
+      for (var s = 0; s < 96; s++) {
+        var id2 = P.laneSymbolId(s % 8, Math.floor(s / 8));
+        var sx2 = x0 + s * bw / 544, sw2 = bw / 544 + 0.5;
+        box(sx2, id2.w ? yB : yA, sw2, barH, th.lanes[s % 8]);
+      }
+    }
+    // Faint symbol boundaries.
+    ctx.strokeStyle = th.paper; ctx.globalAlpha = 0.25; ctx.lineWidth = 0.5; ctx.setLineDash([1, 2]);
+    for (var si = 1; si < 544; si++) {
+      var bxi = x0 + si * bw / 544;
+      ctx.beginPath(); ctx.moveTo(bxi, yA); ctx.lineTo(bxi, yA + barH); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bxi, yB); ctx.lineTo(bxi, yB + barH); ctx.stroke();
+    }
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    // Parity boundary tick.
+    var parX = x0 + 514 * bw / 544;
+    ctx.strokeStyle = th.ink; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(parX, yA - 3); ctx.lineTo(parX, yB + barH + 3); ctx.stroke();
+    label('514', parX, yA - 5, th.muted, 8, 'center');
+    label('+30', parX + (xE - parX) / 2, yA - 5, th.muted, 8, 'center');
+
+    // 8 vertical lane bars.
+    for (var p = 0; p < 8; p++) {
+      var lx = x0 + p * laneStep, lc = th.lanes[p];
+      // Swatch and label above the bar.
+      box(lx + Math.round(laneW / 2) - 4, yLane - 20, 8, 6, lc);
+      label('PCS ' + p, lx + laneW / 2, yLane - 7, th.ink, 8, 'center');
+      // Ghost outline.
+      box(lx, yLane, laneW, laneH, null, th.rule);
+      // Fill: how many symbols has lane p received so far?
+      var nFilled = k > p ? Math.ceil((k - p) / 8) : 0;
+      if (nFilled > 0) {
+        var fillH = Math.round(nFilled * laneH / 136);
+        var amH = am ? Math.round(Math.min(nFilled, 12) * laneH / 136) : 0;
+        if (amH > 0) box(lx, yLane, laneW, amH, mix(lc, th.am, 0.5));
+        if (fillH - amH > 0) box(lx, yLane + amH, laneW, fillH - amH, lc);
+      }
+      // Faint symbol dividers.
+      ctx.strokeStyle = th.paper; ctx.globalAlpha = 0.2; ctx.lineWidth = 0.5; ctx.setLineDash([1, 2]);
+      for (var ri = 1; ri < 136; ri++) {
+        var riy = yLane + ri * laneH / 136;
+        ctx.beginPath(); ctx.moveTo(lx, riy); ctx.lineTo(lx + laneW, riy); ctx.stroke();
+      }
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+      label('136', lx + laneW / 2, yLane + laneH + 11, th.muted, 8, 'center');
+    }
+
+    // Bezier routes: from source position on A or B bar to destination lane bar.
+    function drawRoute(s, alpha, lw2) {
+      var id3 = P.laneSymbolId(s % 8, Math.floor(s / 8));
+      var srcY = id3.w ? yB + barH : yA + barH;
+      var srcX = x0 + (s + 0.5) * bw / 544;
+      var dstX = laneCx(s % 8);
+      var ny2 = Math.floor(s / 8);
+      var dstY = yLane + (ny2 + 0.5) * laneH / 136;
+      var midY = srcY + (dstY - srcY) * 0.5;
+      ctx.strokeStyle = th.lanes[s % 8]; ctx.lineWidth = lw2; ctx.globalAlpha = alpha;
+      ctx.beginPath(); ctx.moveTo(srcX, srcY);
+      ctx.bezierCurveTo(srcX, midY, dstX, midY, dstX, dstY);
+      ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    // Ghost routes: show every 8th symbol (covers all 8 lanes once per group) up to
+    // how far the animation has reached.
+    var ghostMax = stepping ? k : DIST_CON;
+    for (var sc = 0; sc < ghostMax; sc += 8) { drawRoute(sc, 0.18, 1); }
+    // Active route.
+    if (h >= 0) {
+      drawRoute(h, 1, 2);
+      // Highlight the source tile.
+      var hid3 = P.laneSymbolId(h % 8, Math.floor(h / 8));
+      var hx = x0 + (h + 0.5) * bw / 544 - 4;
+      box(hx, hid3.w ? yB - 2 : yA - 2, 8, barH + 4, null, th.ink, 2);
+    }
+
+    var yc = yLane + laneH + 24;
+    label('tx_out symbol s → PCS lane s mod 8; lane p gets A or B alternately, 136 symbols per lane per pair (119.2.4.8)', x0, yc, th.ink, 10, 'left', 600);
+    label((am ? 'first 12 symbols = alignment marker for that lane (shown mixed amber) · ' : '') +
+      'parity starts at symbol 514', x0, yc + 16, th.muted, 10);
+  }
+
   /* ---- symbol distribution: A and B on the left, 8 PCS lanes on the right ---- */
   function drawDist(W) {
     var q = cur.q, u = cur.u, k0 = 4 * u, i0 = 4 * k0, k = step, h = hot();
@@ -3619,17 +3733,29 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     return P.cwSymbol(cur.q, id.w, id.i).bits[b % 10];
   }
 
-  var DRAW = { b66: drawB66, b257: drawB257, am: drawAm, prefec: function (W) { (pfPage ? drawPrefec : drawPrefecConcept)(W); }, rs: drawRs, dist: drawDist, mux: drawMux };
-  // The view in force: the pre-FEC view has an overview page with its own steps and size.
-  function view() { return mode === 'prefec' && !pfPage ? PF_CONCEPT : VIEWS[mode]; }
+  var DRAW = { b66: drawB66, b257: drawB257, am: drawAm,
+    prefec: function (W) { (pfPage ? drawPrefec : drawPrefecConcept)(W); },
+    rs: drawRs,
+    dist: function (W) { (distPage ? drawDist : drawDistConcept)(W); },
+    mux: drawMux };
+  // The view in force: pre-FEC and dist each have an overview page with their own steps and size.
+  function view() {
+    if (mode === 'prefec' && !pfPage) return PF_CONCEPT;
+    if (mode === 'dist' && !distPage) return DIST_CONCEPT;
+    return VIEWS[mode];
+  }
   function height() { return mode === 'mux' ? 152 + 22 * S.link.k : view().h; }
 
-  // Page arrows of the pre-FEC view. Set before sizing: they take width from the canvas.
+  // Page arrows for views that have two pages.
   function pageArrows() {
     ['opv-pg-l', 'opv-pg-r'].forEach(function (id) {
-      var b = $(id), t = pfPage ? 'Back to the overview' : 'Show distribution details';
+      var b = $(id);
       if (!b) return;
-      b.hidden = mode !== 'prefec'; b.title = t; b.setAttribute('aria-label', t);
+      var show = mode === 'prefec' || mode === 'dist';
+      b.hidden = !show;
+      var onPage1 = mode === 'prefec' ? pfPage : distPage;
+      var t = onPage1 ? 'Back to the overview' : 'Show distribution details';
+      b.title = t; b.setAttribute('aria-label', t);
     });
   }
   function size() {
@@ -3656,8 +3782,11 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   function $(id) { return document.getElementById(id); }
   function sync() {
     var v = view(), N = v.steps;
-    if (mode === 'prefec') $('opv-title').textContent = v.title;
-    $('opv-where').textContent = v.where(cur) + (mode === 'prefec' ? ' · page ' + (pfPage ? '2: Distribution details' : '1: Overview') : '');
+    if (mode === 'prefec' || mode === 'dist') $('opv-title').textContent = v.title;
+    var pageSuffix = '';
+    if (mode === 'prefec') pageSuffix = ' · page ' + (pfPage ? '2: Distribution details' : '1: Overview');
+    if (mode === 'dist') pageSuffix = ' · page ' + (distPage ? '2: Detail' : '1: Overview');
+    $('opv-where').textContent = v.where(cur) + pageSuffix;
     $('opv-prev').hidden = $('opv-next').hidden = !v.nav;
     $('opv-play').textContent = anim ? 'Pause' : step < N ? 'Play' : 'Animate';
     $('opv-count').textContent = stepping ? Math.min(step, N) + ' / ' + N : '';
@@ -3742,7 +3871,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     if (!dlg || !VIEWS[m]) return;
     if (P.inspectorOpen && P.inspectorOpen()) P.closeInspector();
     if (S.playing) P.setPlaying(false);
-    mode = m; cur = VIEWS[m].at(); pick = -1; pfPage = 0;
+    mode = m; cur = VIEWS[m].at(); pick = -1; pfPage = 0; distPage = 0;
     step = view().steps; anim = stepping = false; acc = 0;
     $('opv-title').textContent = view().title;
     $('opv-note').textContent = NOTES[m];
@@ -3767,9 +3896,10 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     sync();
     return true;
   };
-  // Pre-FEC view: two pages, so either arrow goes to the other one. Each page starts complete.
+  // Pre-FEC and dist views have two pages; flip between them.
   function flipPage() {
-    pfPage = 1 - pfPage;
+    if (mode === 'prefec') pfPage = 1 - pfPage;
+    else if (mode === 'dist') distPage = 1 - distPage;
     step = view().steps; anim = stepping = false; acc = 0;
     size(); sync();
   }
