@@ -500,8 +500,70 @@
   }
 
   /* ---- symbol distribution: overview page 0 ---- */
-  var DIST_CON = 136;   // animation steps: all 136 lane symbols of a pair
-  var DIST_CONCEPT = { title: 'Symbol distribution · Overview', steps: DIST_CON, rate: 16, h: 390,
+  // Abbreviated animation for the dist overview.
+  // Phase 0: 12 AM lane-symbols one by one (tx_out s 0..95, 8 per step).
+  // Phase 1: DC_HEAD data head symbols.
+  // Phase 2: middle bulk fills instantly (no steps).
+  // Phase 3: DC_TAIL data tail symbols.
+  // Phase 4: DC_PAR parity symbols.
+  var DC_AM = 12, DC_HEAD = 4, DC_TAIL = 4, DC_PAR = 30;
+  var DC_DATA = Math.round(514 / 8) - DC_AM;   // ~53: data symbols per lane excl AM
+  var DC_STEPS = DC_AM + DC_HEAD + DC_TAIL + DC_PAR;   // = 50
+  // How many AM / data / parity lane-symbols each lane has filled after step k.
+  function dcFill(k) {
+    if (k <= 0) return { am: 0, data: 0, parity: 0 };
+    if (k <= DC_AM) return { am: k, data: 0, parity: 0 };
+    var d = k - DC_AM;
+    if (d <= DC_HEAD) return { am: DC_AM, data: d, parity: 0 };
+    // After DC_HEAD the middle data bulk fills instantly.
+    var after = d - DC_HEAD;
+    if (after === 1) return { am: DC_AM, data: DC_AM + DC_DATA - DC_TAIL, parity: 0 };
+    var tailStep = after - 1;
+    if (tailStep <= DC_TAIL) return { am: DC_AM, data: DC_AM + DC_DATA - DC_TAIL + tailStep, parity: 0 };
+    var par = tailStep - DC_TAIL;
+    return { am: DC_AM, data: DC_AM + DC_DATA, parity: Math.min(par, DC_PAR) };
+  }
+  // Map animation step k to a tx_out symbol index (for drawing the active bezier).
+  function dcStepToTxOut(k) {
+    if (k < 0) return -1;
+    if (k < DC_AM) return k * 8;         // one group of 8 per AM step
+    var d = k - DC_AM;
+    if (d < DC_HEAD) return (DC_AM + d) * 8;
+    var after = d - DC_HEAD;
+    if (after === 1) return -1;          // bulk fill: no single bezier
+    var tailStep = after - 1;
+    if (tailStep <= DC_TAIL) {
+      var lane_sym = DC_AM + DC_DATA - DC_TAIL + (tailStep - 1);
+      return lane_sym * 8;
+    }
+    var par = tailStep - DC_TAIL - 1;
+    return (Math.round(514 / 8) + par) * 8;
+  }
+  // Layout geometry, shared with hit-testing.
+  function dcGeo(W) {
+    var x0 = 96, xE = W - 16, bw = xE - x0, barH = 12, barGap = 6;
+    var yA = 42, yB = yA + barH + barGap;
+    var laneW = 14, laneH = 220, yLane = yB + barH + 52;
+    var laneGap = Math.round((bw - 8 * laneW) / 7);
+    var laneStep = laneW + laneGap;
+    return { x0: x0, xE: xE, bw: bw, barH: barH, barGap: barGap,
+      yA: yA, yB: yB, laneW: laneW, laneH: laneH, yLane: yLane,
+      laneStep: laneStep,
+      cx: function (p) { return x0 + p * laneStep + laneW / 2; },
+      lx: function (p) { return x0 + p * laneStep; } };
+  }
+  // Hit-test: which { p, sym } is under canvas point, or null.
+  function dcHit(x, y) {
+    var g = dcGeo(cv.width / dpr);
+    if (y < g.yLane || y > g.yLane + g.laneH) return null;
+    for (var pp = 0; pp < 8; pp++) {
+      if (x >= g.lx(pp) && x < g.lx(pp) + g.laneW)
+        return { p: pp, sym: Math.min(135, Math.floor((y - g.yLane) * 136 / g.laneH)) };
+    }
+    return null;
+  }
+  var distPick = null;
+  var DIST_CONCEPT = { title: 'Symbol distribution · Overview', steps: DC_STEPS, rate: 8, h: 430,
     nav: function (c, d) { return { q: c.q + d, u: 0 }; },
     where: function (c) {
       return 'Pair ' + c.q + ': codewords A and B → 136 symbols per PCS lane' + (P.isAmPair(c.q) ? ' (first 12 = alignment marker)' : '');
@@ -509,36 +571,30 @@
   function drawDistConcept(W) {
     var q = cur.q, k = step, h = hot();
     var am = P.isAmPair(q);
-    // Layout: two thin input bars, then 8 vertical lane bars spread across the full width.
-    var x0 = 96, xE = W - 16, bw = xE - x0, barH = 12, barGap = 6;
-    var yA = 42, yB = yA + barH + barGap;       // input bars
-    var laneH = 200, yLane = yB + barH + 58;     // lane bars start
-    // Spread 8 lane bars evenly across bw with equal inter-bar gaps.
-    var laneW = Math.round((bw - 7 * 4) / 8);   // ~4px gap between lanes
-    var laneStep = laneW + Math.round((bw - 8 * laneW) / 7);
-    // Lane bar centre x.
-    function laneCx(p) { return x0 + p * laneStep + laneW / 2; }
+    var g = dcGeo(W);
+    var x0 = g.x0, xE = g.xE, bw = g.bw, barH = g.barH;
+    var yA = g.yA, yB = g.yB, laneW = g.laneW, laneH = g.laneH, yLane = g.yLane;
+    var fill = dcFill(k);
+    // Per-lane: DC_AM AM symbols, DC_DATA data symbols, DC_PAR parity symbols.
+    var AM_SYM = DC_AM, DATA_SYM = DC_DATA, PAR_SYM = DC_PAR;
+    var amH_full = Math.round(AM_SYM * laneH / 136);
+    var dataH_full = Math.round(DATA_SYM * laneH / 136);
 
-    // Row labels on the left.
+    // Row labels.
     label('in', 8, (yA + yB + barH) / 2, th.ink, 11, 'left', 700);
     label('out', 8, yLane + laneH / 2, th.ink, 11, 'left', 700);
-
-    // Column labels: A over left half, B over right half of each bar.
     label('codeword A · 544 symbols', x0, yA - 11, th.a, 9, 'left', 600);
-    label('codeword B · 544 symbols', x0, yB + barH + 11, th.b, 9, 'left', 600);
+    label('codeword B · 544 symbols', x0, yB + barH + 14, th.b, 9, 'left', 600);
 
-    // Input bars.
+    // Input bars: A and B, AM region lane-coloured, data and parity as base colour.
     box(x0, yA, bw, barH, th.a);
     box(x0, yB, bw, barH, th.b);
-    // AM region: first 96 tx_out symbols. Each goes to A or B depending on laneSymbolId.
     if (am) {
       for (var s = 0; s < 96; s++) {
         var id2 = P.laneSymbolId(s % 8, Math.floor(s / 8));
-        var sx2 = x0 + s * bw / 544, sw2 = bw / 544 + 0.5;
-        box(sx2, id2.w ? yB : yA, sw2, barH, th.lanes[s % 8]);
+        box(x0 + s * bw / 544, id2.w ? yB : yA, bw / 544 + 0.5, barH, th.lanes[s % 8]);
       }
     }
-    // Faint symbol boundaries.
     ctx.strokeStyle = th.paper; ctx.globalAlpha = 0.25; ctx.lineWidth = 0.5; ctx.setLineDash([1, 2]);
     for (var si = 1; si < 544; si++) {
       var bxi = x0 + si * bw / 544;
@@ -546,70 +602,99 @@
       ctx.beginPath(); ctx.moveTo(bxi, yB); ctx.lineTo(bxi, yB + barH); ctx.stroke();
     }
     ctx.setLineDash([]); ctx.globalAlpha = 1;
-    // Parity boundary tick.
     var parX = x0 + 514 * bw / 544;
     ctx.strokeStyle = th.ink; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(parX, yA - 3); ctx.lineTo(parX, yB + barH + 3); ctx.stroke();
     label('514', parX, yA - 5, th.muted, 8, 'center');
     label('+30', parX + (xE - parX) / 2, yA - 5, th.muted, 8, 'center');
 
-    // 8 vertical lane bars.
+    // 8 narrow vertical lane bars: lane colour for AM, gray for data, dark for parity.
+    var dataFill = mix(th.edge, th.paper, 0.15);
+    var parFill  = mix(th.edge, th.ink,   0.55);
     for (var p = 0; p < 8; p++) {
-      var lx = x0 + p * laneStep, lc = th.lanes[p];
-      // Swatch and label above the bar.
-      box(lx + Math.round(laneW / 2) - 4, yLane - 20, 8, 6, lc);
+      var lx = g.lx(p), lc = th.lanes[p];
+      box(lx + laneW / 2 - 4, yLane - 20, 8, 6, lc);
       label('PCS ' + p, lx + laneW / 2, yLane - 7, th.ink, 8, 'center');
-      // Ghost outline.
       box(lx, yLane, laneW, laneH, null, th.rule);
-      // Fill: how many symbols has lane p received so far?
-      var nFilled = k > p ? Math.ceil((k - p) / 8) : 0;
-      if (nFilled > 0) {
-        var fillH = Math.round(nFilled * laneH / 136);
-        var amH = am ? Math.round(Math.min(nFilled, 12) * laneH / 136) : 0;
-        if (amH > 0) box(lx, yLane, laneW, amH, mix(lc, th.am, 0.5));
-        if (fillH - amH > 0) box(lx, yLane + amH, laneW, fillH - amH, lc);
-      }
-      // Faint symbol dividers.
+      // AM region.
+      var amDone = Math.round(Math.min(fill.am, AM_SYM) * laneH / 136);
+      if (amDone > 0) box(lx, yLane, laneW, amDone, am ? mix(lc, th.am, 0.5) : dataFill);
+      // Data region.
+      var dataDone = Math.round(fill.data * laneH / 136);
+      if (dataDone > 0) box(lx, yLane + amH_full, laneW, dataDone, dataFill);
+      // Parity region.
+      var parDone = Math.round(fill.parity * laneH / 136);
+      var parStart = Math.round((AM_SYM + DATA_SYM) * laneH / 136);
+      if (parDone > 0) box(lx, yLane + parStart, laneW, parDone, parFill);
+      // Symbol dividers.
       ctx.strokeStyle = th.paper; ctx.globalAlpha = 0.2; ctx.lineWidth = 0.5; ctx.setLineDash([1, 2]);
       for (var ri = 1; ri < 136; ri++) {
         var riy = yLane + ri * laneH / 136;
         ctx.beginPath(); ctx.moveTo(lx, riy); ctx.lineTo(lx + laneW, riy); ctx.stroke();
       }
       ctx.setLineDash([]); ctx.globalAlpha = 1;
+      // Parity boundary tick.
+      var parTick = yLane + Math.round((AM_SYM + DATA_SYM) * laneH / 136);
+      ctx.strokeStyle = th.muted; ctx.lineWidth = 0.75;
+      ctx.beginPath(); ctx.moveTo(lx - 2, parTick); ctx.lineTo(lx + laneW + 2, parTick); ctx.stroke();
       label('136', lx + laneW / 2, yLane + laneH + 11, th.muted, 8, 'center');
+      // Clicked symbol highlight.
+      if (distPick && distPick.p === p) {
+        var sy = yLane + distPick.sym * laneH / 136;
+        box(lx - 2, sy - 1, laneW + 4, Math.max(2, laneH / 136 + 2), null, th.ink, 1.5);
+      }
     }
 
-    // Bezier routes: from source position on A or B bar to destination lane bar.
-    function drawRoute(s, alpha, lw2) {
-      var id3 = P.laneSymbolId(s % 8, Math.floor(s / 8));
+    // Bezier routes: colour by lane for AM, gray for data/parity.
+    function drawRoute(txOut, alpha, lw2) {
+      var lane = txOut % 8, laneSym = Math.floor(txOut / 8);
+      var id3 = P.laneSymbolId(lane, laneSym);
       var srcY = id3.w ? yB + barH : yA + barH;
-      var srcX = x0 + (s + 0.5) * bw / 544;
-      var dstX = laneCx(s % 8);
-      var ny2 = Math.floor(s / 8);
-      var dstY = yLane + (ny2 + 0.5) * laneH / 136;
+      var srcX = x0 + (txOut + 0.5) * bw / 544;
+      var dstX = g.cx(lane);
+      var dstY = yLane + (laneSym + 0.5) * laneH / 136;
       var midY = srcY + (dstY - srcY) * 0.5;
-      ctx.strokeStyle = th.lanes[s % 8]; ctx.lineWidth = lw2; ctx.globalAlpha = alpha;
+      var col = (am && laneSym < AM_SYM) ? th.lanes[lane] : th.edge;
+      ctx.strokeStyle = col; ctx.lineWidth = lw2; ctx.globalAlpha = alpha;
       ctx.beginPath(); ctx.moveTo(srcX, srcY);
       ctx.bezierCurveTo(srcX, midY, dstX, midY, dstX, dstY);
       ctx.stroke(); ctx.globalAlpha = 1;
     }
-    // Ghost routes: show every 8th symbol (covers all 8 lanes once per group) up to
-    // how far the animation has reached.
-    var ghostMax = stepping ? k : DIST_CON;
-    for (var sc = 0; sc < ghostMax; sc += 8) { drawRoute(sc, 0.18, 1); }
-    // Active route.
-    if (h >= 0) {
-      drawRoute(h, 1, 2);
-      // Highlight the source tile.
-      var hid3 = P.laneSymbolId(h % 8, Math.floor(h / 8));
-      var hx = x0 + (h + 0.5) * bw / 544 - 4;
-      box(hx, hid3.w ? yB - 2 : yA - 2, 8, barH + 4, null, th.ink, 2);
+    // Ghost routes: one per lane per phase.
+    var ghostK = stepping ? k : DC_STEPS;
+    var ghostFill = dcFill(ghostK);
+    for (var gl = 0; gl < 8; gl++) {
+      if (ghostFill.am > 0) drawRoute(gl * 8, 0.2, 1);
+      if (ghostFill.data > 0) drawRoute((AM_SYM + 2) * 8 + gl, 0.15, 1);
+      if (ghostFill.parity > 0) drawRoute((AM_SYM + DATA_SYM + 2) * 8 + gl, 0.15, 1);
+    }
+    // Active route for the hot step.
+    var hotTx = dcStepToTxOut(h);
+    if (hotTx >= 0) {
+      drawRoute(hotTx, 1, 2);
+      var hid3 = P.laneSymbolId(hotTx % 8, Math.floor(hotTx / 8));
+      var hx2 = x0 + (hotTx + 0.5) * bw / 544 - 4;
+      box(hx2, hid3.w ? yB - 2 : yA - 2, 8, barH + 4, null, th.ink, 2);
+    }
+
+    // Tooltip for clicked lane symbol.
+    if (distPick) {
+      var dp = distPick, id4 = P.laneSymbolId(dp.p, dp.sym);
+      var cs = P.cwSymbol(q, id4.w, id4.i);
+      var ttX = g.lx(dp.p) + laneW + 8, ttY = yLane + dp.sym * laneH / 136 - 8;
+      var ttW = 168;
+      if (ttX + ttW > xE) ttX = g.lx(dp.p) - ttW - 8;
+      ttY = Math.max(yLane, Math.min(ttY, yLane + laneH - 52));
+      box(ttX, ttY, ttW, 50, th.paper, th.rule, 1);
+      box(ttX, ttY, ttW, 50, null, th.ink, 1);
+      label('PCS ' + dp.p + '  lane sym ' + dp.sym + ' of 136', ttX + 7, ttY + 13, th.muted, 9);
+      label(cwName(id4.w) + id4.i + ' = 0x' + P.hex(cs.value, 3), ttX + 7, ttY + 29, th.ink, 11, 'left', 700);
+      label((id4.i < P.CW_K ? 'message sym ' + id4.i : 'parity sym ' + (id4.i - P.CW_K)), ttX + 7, ttY + 43, th.muted, 9);
     }
 
     var yc = yLane + laneH + 24;
-    label('tx_out symbol s → PCS lane s mod 8; lane p gets A or B alternately, 136 symbols per lane per pair (119.2.4.8)', x0, yc, th.ink, 10, 'left', 600);
-    label((am ? 'first 12 symbols = alignment marker for that lane (shown mixed amber) · ' : '') +
-      'parity starts at symbol 514', x0, yc + 16, th.muted, 10);
+    label('tx_out symbol s → PCS lane s mod 8; each lane gets 136 symbols per codeword pair (119.2.4.8)', x0, yc, th.ink, 10, 'left', 600);
+    label((am ? 'lane colour = alignment marker · ' : '') + 'gray = data · dark = parity · click a lane symbol to inspect it', x0, yc + 16, th.muted, 10);
   }
 
   /* ---- symbol distribution: A and B on the left, 8 PCS lanes on the right ---- */
@@ -1063,16 +1148,25 @@
       else if (a === 'page') flipPage();
     });
     // AM view: click a slot tile to see what AM insertion did to it.
+    // Dist overview: click a lane symbol to inspect it.
     function canvasPoint(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
     cv.addEventListener('click', function (e) {
-      if (mode !== 'am') return;
-      var p = canvasPoint(e), s = amHit(p.x, p.y);
-      if (s < 0) return;
-      pick = s === pick ? -1 : s; sync();
+      if (mode === 'am') {
+        var p = canvasPoint(e), s = amHit(p.x, p.y);
+        if (s < 0) return;
+        pick = s === pick ? -1 : s; sync();
+      } else if (mode === 'dist' && !distPage) {
+        var pt = canvasPoint(e), hit = dcHit(pt.x, pt.y);
+        if (!hit) { distPick = null; dirty = true; draw(); return; }
+        distPick = (distPick && distPick.p === hit.p && distPick.sym === hit.sym) ? null : hit;
+        dirty = true; draw();
+      }
     });
     cv.addEventListener('mousemove', function (e) {
       var p = canvasPoint(e);
-      cv.style.cursor = mode === 'am' && amHit(p.x, p.y) >= 0 ? 'pointer' : '';
+      if (mode === 'am') cv.style.cursor = amHit(p.x, p.y) >= 0 ? 'pointer' : '';
+      else if (mode === 'dist' && !distPage) cv.style.cursor = dcHit(p.x, p.y) ? 'pointer' : '';
+      else cv.style.cursor = '';
     });
     dlg.addEventListener('keydown', function (e) {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
