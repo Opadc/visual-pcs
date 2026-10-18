@@ -2932,7 +2932,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
         return 'AM insertion ' + c.q / P.AM_PAIRS + ': 4 AM blocks, then 257-bit blocks ' + b + '–' + (b + 2 * P.PAIR_SLOTS - P.AM_SLOTS - 1) + ' in slots 4–79';
       } },
     // PF_SYMS stream symbols per window: the most that fit on one row with readable bits.
-    prefec: { title: 'Pre-FEC distribution', stage: 3, steps: PF_SYMS, rate: 3, h: 376,
+    prefec: { title: 'Pre-FEC distribution · Distribution details', stage: 3, steps: PF_SYMS, rate: 3, h: 376,
       at: function () {
         var p = pairAt(boxMid('prefec')), j = Math.floor(p.f * 1028) - PF_SYMS / 2;
         return { q: p.q, j: Math.max(0, Math.min(PF_LAST, j - mod(j, 2))) };
@@ -3193,36 +3193,72 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     }
     ctx.globalAlpha = 1;
   }
-  /* ---- pre-FEC distribution, page 0: overview showing the interleaving concept.
-     Horizontal input bitstream at top with dashed symbol boundaries.
-     Two vertical output bitstreams below, one for each message. ---- */
-  var PF_CON = 32;   // animation steps = symbols shown during animation
-  var PF_CONCEPT = { title: 'Pre-FEC distribution', steps: PF_CON, rate: 3, h: 400,
-    where: function () { return 'Overview: 10,280-bit stream alternately interleaved into two 5,140-bit messages'; } };
+  /* ---- pre-FEC distribution, page 0: the overview. The input stream is a thin
+     bar like the RS to-scale bars, its first PF_CON 10-bit symbols marked off by
+     faint dashed lines; m_A and m_B are thin vertical bars below. Stepping deals
+     one symbol at a time: even symbols down to m_A, odd ones to m_B. ---- */
+  var PF_CON = 56, PF_ROWS = PF_CON / 2;   // symbols shown, and rows of each message bar
+  var PF_CONCEPT = { title: 'Pre-FEC distribution · Overview', steps: PF_CON, rate: 6, h: 432,
+    nav: function (c, d) { return { q: c.q + d, j: c.j }; },
+    where: function (c) { return 'Pair ' + c.q + ': 40 × 257 = 10,280 bits → 1028 ten-bit symbols → m_A and m_B, 514 symbols each'; } };
+  function pfDash(x0, y0, x1, y1) {
+    ctx.strokeStyle = th.paper; ctx.globalAlpha = 0.55; ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+  }
   function drawPrefecConcept(W) {
-    var k = step, h = hot();
-    var x0 = 100, y0 = 60, wStream = W - x0 - 50;
-    var h_in = 30;
-    var xA = x0 + 40, xB = W - 110, yOut = y0 + h_in + 60, hOut = 250;
-    // Input bitstream: horizontal line with dashed symbol boundaries.
-    box(x0, y0, wStream, h_in, th.edge);
-    ctx.strokeStyle = th.muted; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-    for (var s = 1; s < 32; s++) {
-      var x = x0 + s * wStream / 32;
-      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y0 + h_in); ctx.stroke();
+    var q = cur.q, k = step, h = hot();
+    var x0 = 96, xE = W - 60, sw = (xE - x0) / PF_CON, y0 = 52, bh = 12;
+    var vw = 12, ch = 8, yOut = 140, hOut = PF_ROWS * ch;
+    var xs = [Math.round(x0 + (xE - x0) * 0.3), Math.round(x0 + (xE - x0) * 0.7)];
+    function cell(j) { return { x: xs[j & 1], y: yOut + (j >> 1) * ch }; }
+    label('in: tx_scrambled_am, 40 × 257-bit blocks = 10,280 bits = 1028 ten-bit symbols, bit 0 first →', x0, 18, th.ink, 11, 'left', 600);
+    label('stream', 8, y0 + bh / 2, th.ink, 11, 'left', 700);
+    // The stream bar, each symbol in the colour of the message it goes to; dealt symbols fade while stepping.
+    for (var j = 0; j < PF_CON; j++) {
+      if (stepping && k > j) ctx.globalAlpha = 0.28;
+      box(x0 + j * sw, y0, sw + 0.5, bh, j & 1 ? th.b : th.a);
+      ctx.globalAlpha = 1;
     }
-    ctx.setLineDash([]);
-    // Output bitstreams: vertical lines.
-    var vw = 12;
-    box(xA, yOut, vw, hOut, th.a);
-    box(xB, yOut, vw, hOut, th.b);
-    // Animated fill showing how much has been dealt to each output.
-    var nA = Math.floor(k / 2) * 10, nB = Math.floor((k + 1) / 2) * 10;   // bits, not symbols
-    var fillA = nA / (514 * 10) * hOut, fillB = nB / (514 * 10) * hOut;
-    ctx.fillStyle = mix(th.a, th.paper, 0.5);
-    ctx.fillRect(xA, yOut + hOut - fillA, vw, fillA);
-    ctx.fillStyle = mix(th.b, th.paper, 0.5);
-    ctx.fillRect(xB, yOut + hOut - fillB, vw, fillB);
+    for (var d = 1; d < PF_CON; d++) pfDash(x0 + d * sw, y0, x0 + d * sw, y0 + bh);
+    label('⋯ s1027', xE + 6, y0 + bh / 2, th.muted, 10);
+    for (var n = 0; n < PF_CON; n += 8) label('s' + n, x0 + (n + 0.5) * sw, y0 - 9, th.muted, 9, 'center');
+    // 257-bit block boundaries fall inside symbols: blocks and symbols do not line up.
+    for (var b = 0; 257 * b < 10 * PF_CON; b++) {
+      var bx = x0 + 25.7 * b * sw;
+      if (b) { ctx.strokeStyle = th.ink; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(bx, y0 - 2); ctx.lineTo(bx, y0 + bh + 6); ctx.stroke(); }
+      label('257-bit block ' + (P.slot257(q * P.PAIR_SLOTS + b).am ? b + ' (AM)' : b), bx + 4, y0 + bh + 12, th.muted, 9);
+    }
+    // The two messages: thin vertical bars, one symbol per dashed row.
+    [0, 1].forEach(function (w) {
+      var x = xs[w], c = w ? th.b : th.a;
+      label('m_' + cwName(w) + ' · 514 symbols', x + vw / 2, yOut - 14, th.ink, 11, 'center', 700);
+      box(x, yOut, vw, hOut, null, th.rule);
+      for (var r = 0; r < PF_ROWS; r++) {
+        var jj = 2 * r + w;
+        if (!stepping || k > jj) box(x, yOut + r * ch, vw, ch + 0.5, c);
+        if (r % 4 === 0) label(cwName(w) + r, x + vw + 6, yOut + r * ch + ch / 2, th.muted, 9);
+      }
+      for (var r2 = 1; r2 < PF_ROWS; r2++) pfDash(x, yOut + r2 * ch, x + vw, yOut + r2 * ch);
+      label('⋮ ' + cwName(w) + '513', x + vw / 2, yOut + hOut + 12, th.muted, 10, 'center');
+    });
+    // The route of the symbol just dealt, while stepping.
+    function route(j, col, lw) {
+      var cx = x0 + (j + 0.5) * sw, t = cell(j), ty = t.y + ch / 2, side = t.x < cx ? t.x + vw + 2 : t.x - 2;
+      ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.moveTo(cx, y0 + bh + 2);
+      ctx.bezierCurveTo(cx, ty, (cx + side) / 2, ty, side, ty); ctx.stroke();
+      var dir = t.x < cx ? 1 : -1;
+      ctx.beginPath(); ctx.moveTo(side, ty); ctx.lineTo(side + 7 * dir, ty - 4); ctx.lineTo(side + 7 * dir, ty + 4); ctx.closePath(); ctx.fill();
+    }
+    if (h >= 0) {
+      route(h, th.ink, 1.6);
+      box(x0 + h * sw - 1, y0 - 2, sw + 2, bh + 4, null, th.ink, 2);
+      var t = cell(h); box(t.x - 2, t.y - 2, vw + 4, ch + 4, null, th.ink, 2);
+    }
+    var yc = yOut + hOut + 36;
+    label('stream symbol 2i → m_A as A_i, symbol 2i+1 → m_B as B_i, 10 bits each, unchanged (119.2.4.5)', x0, yc, th.ink, 10, 'left', 600);
+    label('dashed lines = 10-bit symbol boundaries; solid ticks = 257-bit blocks (mid-symbol); colour = destination', x0, yc + 18, th.muted, 10);
   }
 
 
@@ -3553,7 +3589,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   // Page arrows of the pre-FEC view. Set before sizing: they take width from the canvas.
   function pageArrows() {
     ['opv-pg-l', 'opv-pg-r'].forEach(function (id) {
-      var b = $(id), t = pfPage ? 'Back to the overview' : 'Show the actual bits';
+      var b = $(id), t = pfPage ? 'Back to the overview' : 'Show distribution details';
       if (!b) return;
       b.hidden = mode !== 'prefec'; b.title = t; b.setAttribute('aria-label', t);
     });
@@ -3582,7 +3618,8 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   function $(id) { return document.getElementById(id); }
   function sync() {
     var v = view(), N = v.steps;
-    $('opv-where').textContent = v.where(cur) + (mode === 'prefec' ? ' · page ' + (pfPage + 1) + ' of 2' : '');
+    if (mode === 'prefec') $('opv-title').textContent = v.title;
+    $('opv-where').textContent = v.where(cur) + (mode === 'prefec' ? ' · page ' + (pfPage ? '2: Distribution details' : '1: Overview') : '');
     $('opv-prev').hidden = $('opv-next').hidden = !v.nav;
     $('opv-play').textContent = anim ? 'Pause' : step < N ? 'Play' : 'Animate';
     $('opv-count').textContent = stepping ? Math.min(step, N) + ' / ' + N : '';
@@ -3753,8 +3790,8 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     });
     dlg.addEventListener('keydown', function (e) {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-      // On the overview there is nothing to step through, so the arrows turn the page.
-      if (mode === 'prefec' && !pfPage) flipPage(); else nav(e.key === 'ArrowRight' ? 1 : -1);
+      // Arrow keys walk units; the page buttons beside the canvas turn the pre-FEC pages.
+      nav(e.key === 'ArrowRight' ? 1 : -1);
       e.preventDefault();
     });
     // The close event is queued; a view reopened in the meantime must survive it.
