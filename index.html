@@ -3200,57 +3200,59 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     }
     ctx.globalAlpha = 1;
   }
-  /* ---- pre-FEC distribution, page 0: overview with concept view.
-     One horizontal input stream at top, two vertical output lines below.
-     Dashed lines mark symbol boundaries in the input; each animation step
-     shows one symbol's arrow from stream to its destination. ---- */
+  /* ---- pre-FEC distribution, page 0: overview with symbol interleaving.
+     The 1028-bit stream read as 1028 ten-bit symbols, dealt alternately
+     to m_A and m_B. Shows the stream at top, the two growing message grids
+     below, and an arrow animating each symbol to its destination. ---- */
   var PF_CON = 32;   // animation steps = symbols shown during animation
-  var PF_CONCEPT = { title: 'Pre-FEC distribution', steps: PF_CON, rate: 3, h: 300,
-    where: function () { return 'Overview: 1028 ten-bit symbols dealt alternately between m_A and m_B'; } };
+  var PF_CONCEPT = { title: 'Pre-FEC distribution', steps: PF_CON, rate: 3, h: 320,
+    where: function () { return 'Overview: 1028-bit stream → 1028 ten-bit symbols → 514 each to m_A and m_B'; } };
   function drawPrefecConcept(W) {
     var k = step, h = hot();
-    var x0 = 70, y0 = 60, h_in = 30, h_out = 180, gap = 40;
-    var xStream = x0, yStream = y0;
-    var xA = x0 + 40, xB = W - 110, yA = y0 + h_in + gap, yB = yA;
-    var wStream = W - x0 - 50;
-    // Input stream: horizontal bar with dashed symbol boundaries.
-    box(xStream, yStream, wStream, h_in, th.edge);
-    label('in: stream (1028 symbols) →', xStream - 60, yStream + h_in / 2, th.ink, 10, 'right', 600);
-    ctx.strokeStyle = th.muted; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-    for (var s = 1; s < 32; s++) {
-      var x = xStream + s * wStream / 32;
-      ctx.beginPath(); ctx.moveTo(x, yStream); ctx.lineTo(x, yStream + h_in); ctx.stroke();
+    var x0 = 70, y0 = 40, y1 = 110, y2A = 160, y2B = 220;
+    var sw = (W - 16 - x0 - 31 * 4) / 32, cw = sw / 10;   // symbol width, color-cell width
+    label('in: 1028-bit stream, read as 10-bit symbols →', x0, 16, th.ink, 11, 'left', 600);
+    label('stream', 8, y0 + 20, th.ink, 10, 'left', 700);
+    // Stream symbols: show first 32 symbols being dealt.
+    for (var s = 0; s < 32; s++) {
+      var x = x0 + s * (sw + 4);
+      var on = s < k, odd = s & 1;
+      // Simplified symbol tile: just show if it's dealt and whether it goes to A or B.
+      box(x, y0, sw, 24, on ? (odd ? th.b : th.a) : null, on ? null : th.rule, 1);
+      if (on && sw > 10) label('s' + s, x + sw / 2, y0 + 12, onFill(odd ? th.b : th.a), 9, 'center', 600);
     }
-    ctx.setLineDash([]);
-    // Symbol markers above stream.
-    for (var s = 0; s <= 32; s++) {
-      var x = xStream + s * wStream / 32;
-      ctx.strokeStyle = th.muted; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, yStream - 2); ctx.lineTo(x, yStream - 8); ctx.stroke();
-      if (s % 4 === 0) label(String(s), x, yStream - 14, th.muted, 9, 'center');
+    // Message grid A: 4 columns wide, rows fill as symbols are dealt.
+    label('m_A (even symbols)', 8, y2A + 40, th.ink, 10, 'left', 700);
+    var nA = Math.floor(k / 2);
+    for (var i = 0; i < nA; i++) {
+      var col = i % 4, row = Math.floor(i / 4);
+      var x = x0 + col * (sw + 4), y = y2A + row * 28;
+      box(x, y, sw, 24, th.a);
+      if (sw > 12) label('A' + i, x + sw / 2, y + 12, onFill(th.a), 9, 'center', 600);
     }
-    // Output lines: two thin vertical bars, one for each codeword.
-    var lineW = 8;
-    box(xA, yA, lineW, h_out, th.a);
-    box(xB, yB, lineW, h_out, th.b);
-    label('m_A', xA - 40, yA + h_out / 2, th.ink, 10, 'right', 600);
-    label('m_B', xB - 40, yB + h_out / 2, th.ink, 10, 'right', 600);
-    // Show symbol count below outputs.
-    var nA = Math.floor(k / 2), nB = Math.floor((k - 1) / 2);
-    label(nA + ' symbols', xA + lineW / 2, yA + h_out + 16, th.muted, 9, 'center');
-    label(nB + (k % 2 ? '.5' : '') + ' symbols', xB + lineW / 2, yB + h_out + 16, th.muted, 9, 'center');
-    // The single active arrow points from the stream to its destination.
+    // Message grid B: 4 columns wide, rows fill as symbols are dealt.
+    label('m_B (odd symbols)', 8, y2B + 40, th.ink, 10, 'left', 700);
+    var nB = Math.floor((k + 1) / 2);
+    for (var i = 0; i < nB; i++) {
+      var col = i % 4, row = Math.floor(i / 4);
+      var x = x0 + col * (sw + 4), y = y2B + row * 28;
+      box(x, y, sw, 24, th.b);
+      if (sw > 12) label('B' + i, x + sw / 2, y + 12, onFill(th.b), 9, 'center', 600);
+    }
+    // Active arrow: from current symbol to its destination.
     if (h >= 0 && h < 32) {
-      var src_x = xStream + h * wStream / 32 + wStream / 64, src_y = yStream + h_in / 2;
-      var odd = h & 1;
-      var dst_x = (odd ? xB : xA) + lineW / 2;
-      var dst_y = yA + h_out / 2;
+      var src_x = x0 + h * (sw + 4) + sw / 2, src_y = y0 + 24;
+      var odd = h & 1, idx = Math.floor(h / 2);
+      var dst_col = idx % 4, dst_row = Math.floor(idx / 4);
+      var dst_x = x0 + dst_col * (sw + 4) + sw / 2;
+      var dst_y = (odd ? y2B : y2A) + dst_row * 28;
       ctx.strokeStyle = th.ink; ctx.fillStyle = th.ink; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(src_x, src_y); ctx.quadraticCurveTo((src_x + dst_x) / 2, (src_y + dst_y) / 2 + 40, dst_x, dst_y); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(dst_x, dst_y); ctx.lineTo(dst_x - 4, dst_y - 6); ctx.lineTo(dst_x + 4, dst_y - 6); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(src_x, src_y); ctx.quadraticCurveTo((src_x + dst_x) / 2, (src_y + dst_y) / 2 - 20, dst_x, dst_y - 24); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(dst_x, dst_y - 24); ctx.lineTo(dst_x - 4, dst_y - 28); ctx.lineTo(dst_x + 4, dst_y - 28); ctx.closePath(); ctx.fill();
     }
-    var yc = yB + h_out + 50;
-    label('every 10-bit symbol (s0, s1, s2, …) goes to m_A or m_B in turn', x0, yc, th.ink, 10, 'left', 600);
-    label('each codeword gets 514 symbols; RS(544,514) adds 30 parity symbols to each, then the PCS distributes onto 8 lanes', x0, yc + 18, th.muted, 10);
+    var yc = Math.max(y2A, y2B) + 140;
+    label('stream symbols 0, 2, 4, … → m_A<513>, m_A<512>, … ; symbols 1, 3, 5, … → m_B<513>, m_B<512>, …', x0, yc, th.ink, 10, 'left', 600);
+    label('next page shows all 1028 symbols and their 10-bit detail', x0, yc + 18, th.muted, 10);
   }
 
 
