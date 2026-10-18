@@ -45,7 +45,7 @@
     { n: 4, side: 'TX', title: 'Symbol distribution and the 8 PCS lanes', span: [31, 45],
       body: '<p><b>Symbol distribution</b> interleaves codewords A and B 10 bits at a time and deals the result across PCS lanes 0 to 7 in turn. Lane 0 receives A0, B4, A8, B12 &hellip;, lane 1 receives B0, A4, B8 &hellip;; each lane gets 136 symbols of every codeword pair, half from each codeword.</p>' +
         '<p>Each PCS lane is a 26.5625 Gb/s stream. Its identity is in the data: the AM group was pre-interleaved so that each lane’s first 12 symbols are <b>its own 120-bit marker</b>, whose unique bytes name the lane. On transmit, PMA lane <i>i</i> carries PCS lane <i>i</i>.</p>',
-      watch: 'Each colour is one PCS lane. A cube is 4 lane symbols; the 3 tall pale cubes are the lane’s marker, launched on all 8 lanes together.',
+      watch: 'A cube is 4 lane symbols. The 3 tall cubes in full lane colour are the lane’s marker, launched on all 8 lanes together; data cubes are grey with a tint of their lane’s colour.',
       lens: ['dist'] },
     { n: 5, side: 'TX', title: 'PMA bit-multiplexing', span: [42, 51],
       body: '<p>The PMA interleaves PCS lanes <b>bit by bit</b> onto fewer physical lanes. With 4 SerDes lanes, two PCS lanes share each one; with 2, four share each. Every bit of a given PCS lane follows the same physical path for as long as the mapping holds.</p><p>The PMA does not look inside the data. It does not move AMs, decode FEC, or care which lane number it carries.</p>',

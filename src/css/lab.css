@@ -51,8 +51,8 @@ input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offs
 }
 .legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .legend i { display: inline-block; }
-.lg-cube { width: 10px; height: 8px; background: var(--lane-1); }
-.lg-am { width: 4px; height: 13px; background: color-mix(in srgb, var(--lane-1) 55%, var(--scene-bg)); }
+.lg-cube { width: 10px; height: 8px; background: color-mix(in srgb, var(--lane-1) 35%, var(--scene-edge)); }
+.lg-am { width: 4px; height: 13px; background: var(--lane-1); }
 .lg-ring { width: 10px; height: 10px; border: 2px solid var(--good); border-radius: 50%; }
 .lg-sheath { width: 16px; height: 9px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 18%, transparent); }
 .lg-bad { width: 9px; height: 9px; background: var(--bad); }

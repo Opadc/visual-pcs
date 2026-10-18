@@ -53,6 +53,7 @@
     return false;
   }
 
+  var LANE_TINT = 0.35;   // share of lane colour in a data cube
   // PCS-lane data units from symbol distribution to lane reorder. Cube n on a
   // lane is 4 PCS-lane symbols; the first 3 cubes of an AM pair are the marker.
   function drawLanes() {
@@ -77,10 +78,14 @@
         var y = P.yPath(link, lane, x), z = P.zPath(link, lane, x);
         var isAm = P.isAmUnit(n), parity = isParityUnit(p, n);
         var state = '';
-        c.copy(G.col.lanes[p]);
+        // As in the popups: a lane's marker in its full colour, data grey with a
+        // lane tint (enough to tell lanes apart where they share a SerDes lane), parity darker.
         var len = 0.36 * comp, h = 0.42, d = 0.42;
-        if (isAm) { c.lerp(G.col.paper, 0.45); len = 0.46 * comp; h = 0.9; d = 0.85; y += 0.24; }
-        else if (parity) c.lerp(G.col.ink, 0.35);
+        if (isAm) { c.copy(G.col.lanes[p]); len = 0.46 * comp; h = 0.9; d = 0.85; y += 0.24; }
+        else {
+          c.copy(G.col.edge).lerp(G.col.lanes[p], LANE_TINT);
+          if (parity) c.lerp(G.col.ink, 0.45);
+        }
         if (dead && x > X.noiseAt && x < X.amLock + 0.5) {
           c.copy(G.col.muted); y += (P.hash(n, p) - 0.5) * 0.5; h *= 0.6; state = 'los';
         } else if (amBad && isAm && x > X.mux[0]) {
