@@ -18,7 +18,7 @@
     { x: [71.5, 73.5], name: 'Alignment lock', stage: 8, lane: true, short: 'AM lock', view: 'lock' },
     { x: [74.5, 78.5], name: 'Deskew', stage: 8, lane: true, view: 'deskew' },
     { x: [79.5, 83.5], name: 'Lane reorder', stage: 8, lane: true, view: 'reorder' },
-    { x: [85, 87], name: 'De-interleave', stage: 9, short: 'De-intlv', view: 'deint' },
+    { x: [85.25, 86.75], name: 'De-interleave', stage: 9, lane: true, short: 'De-intlv', view: 'deint' },
     { x: [87.5, 91], name: 'RS(544,514) decode', stage: 9, short: 'RS decode', fec: true, view: 'rsdec' },
     { x: [91.5, 93.5], name: 'Post-FEC interleave', stage: 9, short: 'Post-FEC', view: 'postfec' },
     { x: [94, 97], name: 'AM removal', stage: 9, view: 'amr' },

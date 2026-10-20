@@ -661,13 +661,15 @@
      rx: de-interleave, the 8 PCS lanes on the left, A and B on the right. ---- */
   function drawDist(W, rx) {
     var q = cur.q, u = cur.u, k0 = 4 * u, i0 = 4 * k0, k = step, h = hot();
-    var mid = Math.round(W * (rx ? 0.5 : 0.47)), rh = 30, y0 = 50, yA = y0 + 3 * rh - 6, yB = yA + 2 * rh + 12, am = P.isAmPair(q) && u < P.AM_UNITS;
-    // cx/lw: the codeword tiles; lx/rw: the lane cells.
-    var cx0 = rx ? mid + 96 : 96, lw = rx ? (W - 16 - cx0) / 16 : (mid - 30 - cx0) / 16;
-    var lx = rx ? 128 : mid + 74, rw = rx ? (mid - 30 - lx) / 4 : (W - 16 - lx) / 4;
+    var mid = Math.round(W * 0.47), rh = 30, y0 = 50, yA = y0 + 3 * rh - 6, yB = yA + 2 * rh + 12, am = P.isAmPair(q) && u < P.AM_UNITS;
+    // The two blocks and the gap between them, mirrored for RX so both views
+    // have the same tile widths: TX codewords [96, mid-30], lanes [mid+74, W-16].
+    var cwL = rx ? W - mid + 30 : 96, cwR = rx ? W - 96 : mid - 30;
+    var laneL = rx ? 16 : mid + 74, laneR = rx ? W - mid - 74 : W - 16;
+    var lw = (cwR - cwL) / 16, rw = (laneR - laneL) / 4;   // codeword tile, lane cell
     var cwIn = 'codewords A and B, symbols ' + i0 + '–' + (i0 + 15), lnIn = 'PCS lanes, lane symbols ' + k0 + '–' + (k0 + 3);
-    label('in: ' + (rx ? lnIn : cwIn), rx ? 8 : cx0, 18, th.ink, 11, 'left', 600);
-    label('out: ' + (rx ? cwIn : lnIn), rx ? cx0 - 88 : lx - 60, 18, th.ink, 11, 'left', 600);
+    label('in: ' + (rx ? lnIn : cwIn), rx ? 8 : cwL, 18, th.ink, 11, 'left', 600);
+    label('out: ' + (rx ? cwIn : lnIn), rx ? cwL - 88 : laneL - 60, 18, th.ink, 11, 'left', 600);
     // Lane symbol kk of lane p is codeword symbol 4kk + (p >> 1) of A or B, so
     // codeword symbol i sits at lane symbol i >> 2, on lane 2(i & 3) + (w xor parity of i >> 2).
     function dest(w, i) { var kk = i >> 2; return { p: 2 * (i & 3) + (w ^ (kk & 1)), kk: kk }; }
@@ -675,9 +677,9 @@
     function order(p, c) { return 8 * c + p; }
     [0, 1].forEach(function (w) {
       var y = w ? yB : yA;
-      label('codeword ' + cwName(w), rx ? cx0 - 88 : 8, y + rh / 2, th.ink, 11, 'left', 700);
+      label('codeword ' + cwName(w), rx ? cwL - 88 : 8, y + rh / 2, th.ink, 11, 'left', 700);
       for (var n = 0; n < 16; n++) {
-        var i = i0 + n, d = dest(w, i), o = order(d.p, d.kk - k0), x = cx0 + n * lw, f = distFill(q, w, i);
+        var i = i0 + n, d = dest(w, i), o = order(d.p, d.kk - k0), x = cwL + n * lw, f = distFill(q, w, i);
         // TX: faded once dealt. RX: empty until taken off its lane.
         if (rx && k <= o) { box(x + 1, y, lw - 2, rh, null, th.rule); continue; }
         if (!rx && stepping && k > o) ctx.globalAlpha = 0.28;
@@ -687,13 +689,15 @@
         ctx.globalAlpha = 1;
       }
     });
-    if (rx) arrow(mid - 14, mid + 22, (yA + yB + rh) / 2); else arrow(mid - 22, mid + 14, (yA + yB + rh) / 2);
+    if (rx) arrow(W - mid - 14, W - mid + 22, (yA + yB + rh) / 2); else arrow(mid - 22, mid + 14, (yA + yB + rh) / 2);
     for (var p = 0; p < 8; p++) {
       var y = y0 + p * (rh + 6) - 6;
-      box(lx - 64, y + 7, 8, rh - 14, th.lanes[p]);
-      label('PCS ' + p, lx - 50, y + rh / 2, th.ink, 11, 'left', 600);
+      // The lane's colour and name: left of the lanes on TX, right of them on RX.
+      var sx = rx ? laneR + 6 : laneL - 64;
+      box(sx, y + 7, 8, rh - 14, th.lanes[p]);
+      label('PCS ' + p, sx + 14, y + rh / 2, th.ink, 11, 'left', 600);
       for (var c = 0; c < 4; c++) {
-        var id = P.laneSymbolId(p, k0 + c), x = lx + c * rw, o = order(p, c);
+        var id = P.laneSymbolId(p, k0 + c), x = laneL + c * rw, o = order(p, c);
         if (!rx && k <= o) { box(x + 1, y, rw - 2, rh, null, th.rule); continue; }
         var cs = P.cwSymbol(q, id.w, id.i), f = distFill(q, id.w, id.i);
         if (rx && stepping && k > o) ctx.globalAlpha = 0.28;
@@ -702,7 +706,7 @@
         ctx.globalAlpha = 1;
         if (o === h) {
           box(x - 1, y - 2, rw + 2, rh + 4, null, th.ink, 2);
-          var n2 = id.i - i0, ly = id.w ? yB : yA, tx = cx0 + n2 * lw;
+          var n2 = id.i - i0, ly = id.w ? yB : yA, tx = cwL + n2 * lw;
           box(tx - 1, ly - 2, lw + 2, rh + 4, null, th.ink, 2);
           ctx.strokeStyle = th.ink; ctx.lineWidth = 1.2; ctx.beginPath();
           var sy = id.w ? ly + rh + 2 : ly - 2, ex = rx ? x + rw + 1 : x - 1;
@@ -710,11 +714,11 @@
         }
       }
     }
-    var yc = y0 + 8 * (rh + 6) + 6;
+    var yc = y0 + 8 * (rh + 6) + 6, xc = rx ? 16 : 96;
     label(rx ? 'lane symbol k of PCS lane p goes back to codeword symbol 4k + ⌊p/2⌋ of A or B, read in order 8k + p (inverse of 119.2.4.8)'
-      : 'tx_out symbol s goes to PCS lane s mod 8; lane p gets codeword symbol 4k + ⌊p/2⌋ of A or B at lane symbol k (119.2.4.8)', 8 + (rx ? 0 : 88), yc, th.ink, 10, 'left', 600);
+      : 'tx_out symbol s goes to PCS lane s mod 8; lane p gets codeword symbol 4k + ⌊p/2⌋ of A or B at lane symbol k (119.2.4.8)', xc, yc, th.ink, 10, 'left', 600);
     label(am ? 'alignment-marker symbols: each lane ' + (rx ? 'gives back' : 'receives') + ' its own 120-bit marker, 10 bits at a time, in that lane’s colour'
-      : 'grey = data' + (i0 + 15 >= P.CW_K ? ', darker grey = parity' : '') + ' · lane colour marks alignment-marker symbols, amber the pad and status', 8 + (rx ? 0 : 88), yc + 18, th.muted, 10);
+      : 'grey = data' + (i0 + 15 >= P.CW_K ? ', darker grey = parity' : '') + ' · lane colour marks alignment-marker symbols, amber the pad and status', xc, yc + 18, th.muted, 10);
   }
 
   /* ---- AM insertion and PMA bit-mux ---- */
