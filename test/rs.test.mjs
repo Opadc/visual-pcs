@@ -34,3 +34,22 @@ test('model codewords: parity symbols are real RS parity over the message symbol
     assert.equal(parseInt([...s.bits].reverse().join(''), 2), s.value);   // bit 0 first
   }
 });
+
+test('RS decode corrects up to 15 symbol errors and refuses 16', () => {
+  const msg = Array.from({ length: 514 }, (_, k) => (k * 37 + 11) % 1024);
+  const cw = msg.concat(P.rsParity(msg));
+  assert.deepEqual(P.rsDecode(cw), { ok: true, errors: [], cw, syn: new Array(30).fill(0) });
+  const at = [0, 3, 77, 100, 200, 260, 333, 401, 480, 513, 514, 520, 530, 540, 543, 250];
+  for (const n of [1, 2, 8, 15]) {
+    const bad = cw.slice();
+    at.slice(0, n).forEach((i, j) => { bad[i] ^= 1 + ((j * 97) % 1023); });
+    const r = P.rsDecode(bad);
+    assert.ok(r.ok, n + ' errors');
+    assert.deepEqual(r.cw, cw);
+    assert.deepEqual(r.errors.map((x) => x.i).sort((a, b) => a - b), at.slice(0, n).sort((a, b) => a - b));
+  }
+  const bad = cw.slice();
+  at.forEach((i, j) => { bad[i] ^= 1 + ((j * 97) % 1023); });
+  const r = P.rsDecode(bad);
+  assert.ok(!r.ok || r.cw.some((v, i) => v !== cw[i]), '16 errors are not silently fixed');
+});

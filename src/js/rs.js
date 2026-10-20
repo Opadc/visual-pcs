@@ -49,4 +49,41 @@
     }
     return out;
   };
+
+  // Corrects up to 15 symbol errors: Berlekamp-Massey finds the error locator,
+  // a Chien search its roots, Forney the error values. Symbol i sits at power
+  // 543 - i. Returns { ok, errors: [{ i, e }], cw } with cw corrected, or
+  // ok: false when the errors are beyond the code (the input is returned as is).
+  P.rsDecode = function (cw) {
+    var S = P.rsSyndromes(cw);
+    if (S.every(function (s) { return s === 0; })) return { ok: true, errors: [], cw: cw.slice(), syn: S };
+    var C = [1], B = [1], L = 0, m = 1, b = 1;
+    for (var n = 0; n < NP; n++) {
+      var d = S[n];
+      for (var i = 1; i <= L; i++) d ^= mul(C[i] || 0, S[n - i]);
+      if (d === 0) { m++; continue; }
+      var coef = mul(d, EXP[1023 - LOG[b]]), T = C.slice();
+      for (var j = 0; j < B.length; j++) C[j + m] = (C[j + m] || 0) ^ mul(coef, B[j]);
+      if (2 * L <= n) { L = n + 1 - L; B = T; b = d; m = 1; } else m++;
+    }
+    if (L > NP / 2) return { ok: false, errors: [], cw: cw.slice(), syn: S };
+    // Error evaluator Omega(x) = S(x) C(x) mod x^30.
+    var Om = new Array(NP).fill(0);
+    for (var a = 0; a < NP; a++) for (var c = 0; c <= L && c <= a; c++) Om[a] ^= mul(C[c] || 0, S[a - c]);
+    var out = cw.slice(), errs = [];
+    for (var pos = 0; pos < N; pos++) {
+      var e = 543 - pos, xi = (1023 - e) % 1023, v = 0;   // root at X^-1 = a^-e
+      for (var k = 0; k <= L; k++) v ^= mul(C[k] || 0, EXP[(xi * k) % 1023]);
+      if (v) continue;
+      var num = 0, den = 0;
+      for (var t = 0; t < NP; t++) num ^= mul(Om[t], EXP[(xi * t) % 1023]);
+      for (var u = 1; u <= L; u += 2) den ^= mul(C[u] || 0, EXP[(xi * (u - 1)) % 1023]);
+      if (!den) return { ok: false, errors: [], cw: cw.slice(), syn: S };
+      // First consecutive root a^0, so the magnitude is X * Omega(X^-1) / C'(X^-1).
+      var mag = mul(mul(num, EXP[1023 - LOG[den]]), EXP[e]);
+      errs.push({ i: pos, e: mag }); out[pos] ^= mag;
+    }
+    if (errs.length !== L) return { ok: false, errors: [], cw: cw.slice(), syn: S };
+    return { ok: true, errors: errs, cw: out, syn: S };
+  };
 })(globalThis.PCS = globalThis.PCS || {});

@@ -18,13 +18,13 @@
     { x: [71.5, 73.5], name: 'Alignment lock', stage: 8, lane: true, short: 'AM lock', view: 'lock' },
     { x: [74.5, 78.5], name: 'Deskew', stage: 8, lane: true, view: 'deskew' },
     { x: [79.5, 83.5], name: 'Lane reorder', stage: 8, lane: true, view: 'reorder' },
-    { x: [85, 87], name: 'De-interleave', stage: 9, short: 'De-intlv' },
-    { x: [87.5, 91], name: 'RS(544,514) decode', stage: 9, short: 'RS decode', fec: true },
-    { x: [91.5, 93.5], name: 'Post-FEC interleave', stage: 9, short: 'Post-FEC' },
-    { x: [94, 97], name: 'AM removal', stage: 9 },
+    { x: [85, 87], name: 'De-interleave', stage: 9, short: 'De-intlv', view: 'deint' },
+    { x: [87.5, 91], name: 'RS(544,514) decode', stage: 9, short: 'RS decode', fec: true, view: 'rsdec' },
+    { x: [91.5, 93.5], name: 'Post-FEC interleave', stage: 9, short: 'Post-FEC', view: 'postfec' },
+    { x: [94, 97], name: 'AM removal', stage: 9, view: 'amr' },
     { x: [98, 101], name: 'Descramble', stage: 9 },
-    { x: [102, 106], name: 'Reverse transcode', stage: 9 },
-    { x: [107, 111], name: '64B/66B decode', stage: 9 },
+    { x: [102, 106], name: 'Reverse transcode', stage: 9, view: 'r257' },
+    { x: [107, 111], name: '64B/66B decode', stage: 9, view: 'd66' },
     { x: [112, 116], name: 'RS / MAC', stage: 9 }
   ];
 
@@ -64,6 +64,7 @@
       lens: ['lock', 'deskew', 'reorder'] },
     { n: 9, side: 'RX', title: 'RX FEC, PCS decode, 200GMII and MAC', span: [84, 117],
       body: '<p>Receive mirrors transmit: <b>de-interleave</b> symbols into codewords A and B, <b>RS(544,514) decode</b> (up to 15 symbol errors per codeword corrected), <b>post-FEC interleave</b>, <b>AM removal</b>, <b>descramble</b>, <b>reverse transcode</b> to 66-bit blocks, and <b>64B/66B decode</b> onto 200GMII.</p><p>An uncorrectable codeword is not passed on silently. The PCS marks the affected blocks as errors, so the MAC sees damaged frames as FCS errors.</p>',
-      watch: 'The decoder box flashes when it corrects or fails a codeword. Without align_status, nothing decodes and the MAC sees Local Fault.' }
+      watch: 'The decoder box flashes when it corrects or fails a codeword. Without align_status, nothing decodes and the MAC sees Local Fault.',
+      lens: ['deint', 'rsdec', 'postfec', 'amr', 'r257', 'd66'] }
   ];
 })(globalThis.PCS = globalThis.PCS || {});

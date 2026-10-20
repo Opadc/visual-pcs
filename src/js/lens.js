@@ -15,7 +15,14 @@
      demux  RX PMA demux: a received SerDes lane dealt back onto RX PMA lanes
      lock   alignment lock on one RX PMA lane (Figure 119-12)
      deskew markers lined up across the 8 lanes
-     reorder RX PMA lanes put back in PCS lane order */
+     reorder RX PMA lanes put back in PCS lane order
+   Stage 9 mirrors the TX views, input on top:
+     deint   de-interleave: 8 PCS lanes back into codewords A and B
+     rsdec   RS(544,514) decode: syndromes, correction, parity dropped
+     postfec post-FEC interleave: A and B back into one 10-bit symbol stream
+     amr     AM removal: the 1028-bit group taken out of its 4 slots
+     r257    reverse transcode: one 257-bit block back into four 66-bit blocks
+     d66     64B/66B decode: sync header off, 8 bytes onto 200GMII */
 (function (P) {
   'use strict';
   var S = P.state, dlg, cv, ctx, dpr = 1, mode = null, cur = null;
@@ -127,7 +134,19 @@
     deskew: 'Each SerDes lane has its own path delay, so the markers of the 8 PCS lanes arrive at different times. Deskew holds the early lanes in a buffer until every marker has arrived, ' +
       'then releases them together. Use the buttons or the fault lab’s skew slider; past 180 ns a lane cannot be aligned and align_status stays false.',
     reorder: 'The demux and the board can deliver PCS lanes on any RX PMA lane. Each lane’s marker carries six unique bytes that name its PCS lane; the PCS reads them and puts the lanes back in order, ' +
-      'which FEC de-interleave needs because every codeword is spread across all 8 lanes.'
+      'which FEC de-interleave needs because every codeword is spread across all 8 lanes.',
+    deint: 'With the lanes locked, deskewed and back in order, the receiver undoes symbol distribution: it reads the 8 PCS lanes 10 bits at a time, in turn, ' +
+      'and lane symbol k of lane p goes back to its place as symbol 4k + ⌊p/2⌋ of codeword A or B. A lane out of place would scramble both codewords.',
+    rsdec: 'The decoder computes 30 syndromes from the received 544 symbols. All zero means a valid codeword: the 514 message symbols pass on and the parity is dropped. ' +
+      'Otherwise it locates the bad symbols and their error values and fixes up to 15 per codeword; with more it marks the codeword uncorrectable. The decoding here is real RS(544,514) over the lab’s unscrambled bits.',
+    postfec: 'The inverse of pre-FEC distribution. The corrected messages are interleaved back into one stream of 1028 ten-bit symbols: A_i becomes stream symbol 2i, B_i symbol 2i+1. ' +
+      'Characters split between A and B come back together, and the stream is again 40 257-bit blocks.',
+    amr: 'The inverse of AM insertion. Once every ' + num(AM_STD) + ' × 257-bit blocks the first 1028 bits of a codeword pair are the AM group; the receiver has already used it for lock, deskew and reorder, ' +
+      'so it is taken out and its 4 block slots stay empty. Every other 257-bit block passes on unchanged and in order. The lab removes a group every ' + AM_LAB + ' blocks.',
+    r257: 'The inverse of 256B/257B transcoding. Header bit 1 says all four 64-bit payloads are data, so each gets sync header 01 back and becomes one 66-bit block: ' +
+      '257 bits become 4 × 66 = 264. A header bit 0 would mean control blocks, which this model leaves out.',
+    d66: 'The inverse of 64B/66B encoding. Sync header 01 says the block is all data, so the header is dropped and the 64 bits go onto 200GMII as 8 bytes, unchanged. ' +
+      'Header 10 would mean control characters, which this model leaves out. Bit 0 of each byte arrives first.'
   };
 
   /* ---- drawing helpers ---- */
@@ -350,17 +369,23 @@
     ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
     ctx.setLineDash([]); ctx.globalAlpha = 1;
   }
-  function drawPrefecConcept(W) {
+  // rx: post-FEC interleave, the same picture read the other way: m_A and m_B
+  // on top give up their symbols, the stream below fills.
+  function drawPrefecConcept(W, rx) {
     var q = cur.q, k = step, h = hot();
-    var x0 = 96, xE = W - 60, sw = (xE - x0) / PF_CON, y0 = 52, bh = 12;
-    var vw = 12, ch = 8, yOut = 140, hOut = PF_ROWS * ch;
+    var x0 = 96, xE = W - 60, sw = (xE - x0) / PF_CON, bh = 12;
+    var vw = 12, ch = 8, hOut = PF_ROWS * ch, yOut = rx ? 60 : 140, y0 = rx ? yOut + hOut + 44 : 52;
     var xs = [Math.round(x0 + (xE - x0) * 0.3), Math.round(x0 + (xE - x0) * 0.7)];
     function cell(j) { return { x: xs[j & 1], y: yOut + (j >> 1) * ch }; }
-    label('in: tx_scrambled_am, 40 × 257-bit blocks = 10,280 bits = 1028 ten-bit symbols, bit 0 first →', x0, 18, th.ink, 11, 'left', 600);
+    label(rx ? 'in: m_A and m_B after RS decode, 514 symbols each; out: rx_scrambled_am, 1028 ten-bit symbols = 40 × 257-bit blocks'
+      : 'in: tx_scrambled_am, 40 × 257-bit blocks = 10,280 bits = 1028 ten-bit symbols, bit 0 first →', x0, 18, th.ink, 11, 'left', 600);
     label('stream', 8, y0 + bh / 2, th.ink, 11, 'left', 700);
-    // The stream bar, each symbol in the colour of the message it goes to; dealt symbols fade while stepping.
+    // The stream bar, each symbol in the colour of its message. TX: dealt symbols
+    // fade while stepping. RX: a symbol appears once it has been taken.
+    if (rx) box(x0, y0, xE - x0, bh, null, th.rule);
     for (var j = 0; j < PF_CON; j++) {
-      if (stepping && k > j) ctx.globalAlpha = 0.28;
+      if (rx && stepping && k <= j) continue;
+      if (!rx && stepping && k > j) ctx.globalAlpha = 0.28;
       box(x0 + j * sw, y0, sw + 0.5, bh, j & 1 ? th.b : th.a);
       ctx.globalAlpha = 1;
     }
@@ -380,16 +405,27 @@
       box(x, yOut, vw, hOut, null, th.rule);
       for (var r = 0; r < PF_ROWS; r++) {
         var jj = 2 * r + w;
-        if (!stepping || k > jj) box(x, yOut + r * ch, vw, ch + 0.5, c);
+        if (rx) {
+          if (stepping && k > jj) ctx.globalAlpha = 0.28;
+          box(x, yOut + r * ch, vw, ch + 0.5, c);
+          ctx.globalAlpha = 1;
+        } else if (!stepping || k > jj) box(x, yOut + r * ch, vw, ch + 0.5, c);
         if (r % 4 === 0) label(cwName(w) + r, x + vw + 6, yOut + r * ch + ch / 2, th.muted, 9);
       }
       for (var r2 = 1; r2 < PF_ROWS; r2++) pfDash(x, yOut + r2 * ch, x + vw, yOut + r2 * ch);
       label('⋮ ' + cwName(w) + '513', x + vw / 2, yOut + hOut + 12, th.muted, 10, 'center');
     });
-    // The route of the symbol just dealt, while stepping.
+    // The route of the symbol just dealt, while stepping: stream to message on
+    // TX, message to stream on RX.
     function route(j, col, lw) {
       var cx = x0 + (j + 0.5) * sw, t = cell(j), ty = t.y + ch / 2, side = t.x < cx ? t.x + vw + 2 : t.x - 2;
       ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lw;
+      if (rx) {
+        ctx.beginPath(); ctx.moveTo(side, ty);
+        ctx.bezierCurveTo((cx + side) / 2, ty, cx, ty, cx, y0 - 8); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx, y0 - 2); ctx.lineTo(cx - 4, y0 - 9); ctx.lineTo(cx + 4, y0 - 9); ctx.closePath(); ctx.fill();
+        return;
+      }
       ctx.beginPath(); ctx.moveTo(cx, y0 + bh + 2);
       ctx.bezierCurveTo(cx, ty, (cx + side) / 2, ty, side, ty); ctx.stroke();
       var dir = t.x < cx ? 1 : -1;
@@ -400,25 +436,28 @@
       box(x0 + h * sw - 1, y0 - 2, sw + 2, bh + 4, null, th.ink, 2);
       var t = cell(h); box(t.x - 2, t.y - 2, vw + 4, ch + 4, null, th.ink, 2);
     }
-    var yc = yOut + hOut + 36;
-    label('stream symbol 2i → m_A as A_i, symbol 2i+1 → m_B as B_i, 10 bits each, unchanged (119.2.4.5)', x0, yc, th.ink, 10, 'left', 600);
-    label('dashed lines = 10-bit symbol boundaries; solid ticks = 257-bit blocks (mid-symbol); colour = destination', x0, yc + 18, th.muted, 10);
+    var yc = rx ? y0 + bh + 40 : yOut + hOut + 36;
+    label(rx ? 'A_i → stream symbol 2i, B_i → symbol 2i+1, 10 bits each, unchanged: the inverse of pre-FEC distribution (119.2.4.5)'
+      : 'stream symbol 2i → m_A as A_i, symbol 2i+1 → m_B as B_i, 10 bits each, unchanged (119.2.4.5)', x0, yc, th.ink, 10, 'left', 600);
+    label('dashed lines = 10-bit symbol boundaries; solid ticks = 257-bit blocks (mid-symbol); colour = ' + (rx ? 'source message' : 'destination'), x0, yc + 18, th.muted, 10);
   }
 
 
   /* ---- pre-FEC distribution, page 1: detailed bits view with actual 10-bit tiles.
      Stream horizontal at top, m_A and m_B below. ---- */
-  function drawPrefec(W) {
+  // rx: post-FEC interleave, m_A and m_B on top, the stream they rebuild below.
+  function drawPrefec(W, rx) {
     var q = cur.q, j0 = cur.j, k = step, h = hot(), N = PF_SYMS;
     var x0 = 70, sw = (W - 16 - x0) / N, th1 = 52, oh = 37;
-    var yLoc = 12, yS = 54, yA = 160, yB = 236;
+    var yLoc = 12, yS = rx ? 226 : 54, yA = rx ? 54 : 160, yB = rx ? 130 : 236;
     // Where this window sits in the pair's 1028 symbols: the overview bar, shrunk.
     var lx0 = x0 + 22, lw = W - 16 - 44 - lx0;
     box(lx0, yLoc - 2, lw, 4, mix(th.edge, th.paper, 0.55));
     box(lx0 + j0 * lw / 1028, yLoc - 5, Math.max(3, N * lw / 1028), 10, th.ink);
     label('s0', lx0 - 4, yLoc, th.muted, 9, 'right');
     label('s1027', lx0 + lw + 4, yLoc, th.muted, 9);
-    label('in: tx_scrambled_am, 10 bits per symbol, bit 0 first →', x0, 34, th.ink, 11, 'left', 600);
+    label(rx ? 'in: m_A and m_B after RS decode, 10 bits per symbol; out: rx_scrambled_am, bit 0 first'
+      : 'in: tx_scrambled_am, 10 bits per symbol, bit 0 first →', x0, 34, th.ink, 11, 'left', 600);
     label('stream', 8, yS + 27, th.ink, 11, 'left', 700);
     label('m_A', 8, yA + 18, th.ink, 11, 'left', 700);
     label('even s', 8, yA + 32, th.muted, 9);
@@ -430,12 +469,14 @@
       var j = j0 + t, i = j >> 1, odd = j & 1, x = x0 + t * sw, yd = odd ? yB : yA, cx = x + sw / 2;
       var done = k > t, on = t === h;
       // The stream is one strip: tiles touch, a faint dash marks each symbol boundary.
-      symTile(x, yS, sw, q, j, 's' + j, done && stepping);
+      // TX: it is the input, faded once dealt. RX: the output, filled once taken.
+      if (!rx || done) symTile(x, yS, sw, q, j, 's' + j, !rx && done && stepping);
+      else box(x, yS, sw, oh, null, th.rule);
       if (t) pfDash(x, yS, x, yS + 37);
       label(fit(['bits ' + 10 * j + '–' + (10 * j + 9), String(10 * j)], sw, 9), cx, yS + th1 + 14, th.muted, 9, 'center');
       // A character cut by this boundary: a bracket under its bits on both sides.
       var c = byteOf(10 * j + 9);
-      if (t < N - 1 && c >= 0 && byteOf(10 * j + 10) === c) {
+      if (t < N - 1 && c >= 0 && byteOf(10 * j + 10) === c && (!rx || k > t + 1)) {
         var n0 = 9; while (n0 > 0 && byteOf(10 * j + n0 - 1) === c) n0--;
         var n1 = 10; while (n1 < 19 && byteOf(10 * j + n1 + 1) === c) n1++;
         var bx0 = x + n0 * sw / 10 + 1, bx1 = x + (n1 + 1) * sw / 10 - 1, by = yS + th1 + 2;
@@ -444,33 +485,37 @@
       }
       // The drop, straight down: faint once dealt, bold for the symbol being dealt now.
       if (done) {
+        var ya = rx ? yd + oh + 4 : yS + th1 + 22, yz = rx ? yS : yd;
         ctx.strokeStyle = on ? th.ink : mix(odd ? th.b : th.a, th.paper, 0.3); ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = on ? 1.6 : 1;
-        ctx.beginPath(); ctx.moveTo(cx, yS + th1 + 22); ctx.lineTo(cx, yd - 6); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(cx, yd - 1); ctx.lineTo(cx - 4, yd - 8); ctx.lineTo(cx + 4, yd - 8); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(cx, ya); ctx.lineTo(cx, yz - 6); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx, yz - 1); ctx.lineTo(cx - 4, yz - 8); ctx.lineTo(cx + 4, yz - 8); ctx.closePath(); ctx.fill();
       }
-      // Output tile: name, hex and bits; the characters are already read off the stream above.
-      if (done) symTile(x, yd, sw, q, j, (odd ? 'B' : 'A') + i, false, true);
+      // Message tile: name, hex and bits; the characters are read off the stream.
+      if (rx) symTile(x, yd, sw, q, j, (odd ? 'B' : 'A') + i, done && stepping, true);
+      else if (done) symTile(x, yd, sw, q, j, (odd ? 'B' : 'A') + i, false, true);
       else box(x, yd, sw, oh, null, th.rule);
       if (on) { box(x - 2, yS - 2, sw + 4, 41, null, th.ink, 2); box(x - 2, yd - 2, sw + 4, oh + 4, null, th.ink, 2); }
     }
-    var yc = yB + oh + 26;
-    label('A_i = stream symbol 2i, B_i = symbol 2i+1, 10 bits each, unchanged (119.2.4.5)', x0, yc, th.ink, 10, 'left', 600);
-    label('bracket = a character split between A and B' + (P.isAmPair(q) && j0 < 102 ? ' · lane colours = AM bits' : '') +
+    var yc = rx ? yS + th1 + 40 : yB + oh + 26;
+    label(rx ? 'stream symbol 2i = A_i, symbol 2i+1 = B_i, 10 bits each, unchanged: the inverse of pre-FEC distribution (119.2.4.5)'
+      : 'A_i = stream symbol 2i, B_i = symbol 2i+1, 10 bits each, unchanged (119.2.4.5)', x0, yc, th.ink, 10, 'left', 600);
+    label('bracket = a character ' + (rx ? 'rejoined from A and B' : 'split between A and B') + (P.isAmPair(q) && j0 < 102 ? ' · lane colours = AM bits' : '') +
       ' · dark bit = 257-bit block header', x0, yc + 16, th.muted, 10);
   }
 
   /* ---- RS(544,514): 514 message symbols in, the same 514 + 30 parity out ---- */
-  function msgTile(x, y, w, h, q, cw, i) {
+  // rv: a received value to show instead of the sent one; bad: it is in error.
+  function msgTile(x, y, w, h, q, cw, i, rv, bad) {
     if (i < 0) {
       label('⋯', x + w / 2, y + h * 0.38, th.muted, 14, 'center', 700);
       label(fit(['+509', ''], w, 9), x + w / 2, y + h * 0.72, th.muted, 9, 'center');
       return;
     }
     var s = P.cwSymbol(q, cw, i), am = s.parts.some(function (pt) { return pt.src === 'am' || pt.src === 'pad' || pt.src === 'sf'; });
-    var fill = am ? mix(cw ? th.b : th.a, th.am, 0.6) : cw ? th.b : th.a, tc = onFill(fill);
+    var fill = bad ? th.bad : am ? mix(cw ? th.b : th.a, th.am, 0.6) : cw ? th.b : th.a, tc = onFill(fill);
     box(x + 1, y, w - 2, h, fill);
     label(fit([cwName(cw) + i, String(i)], w - 2, 10, 600), x + w / 2, y + h * 0.3, tc, 10, 'center', 600);
-    label(fit([P.hex(s.value, 3)], w - 2, 10), x + w / 2, y + h * 0.68, tc, 10, 'center');
+    label(fit([P.hex(rv === undefined ? s.value : rv, 3)], w - 2, 10), x + w / 2, y + h * 0.68, tc, 10, 'center');
   }
   function drawRs(W) {
     var q = cur.q, k = step, h = hot();
@@ -538,19 +583,26 @@
   }
   // tx_out position of codeword symbol i of codeword w (the inverse of P.laneSymbolId).
   function dcOrder(w, i) { var kk = i >> 2; return 8 * kk + 2 * (i & 3) + (w ^ (kk & 1)); }
-  function drawDistConcept(W) {
+  // rx: de-interleave, the same picture read the other way: the PCS lanes on top
+  // give up their symbols, codewords A and B below fill.
+  function drawDistConcept(W, rx) {
     var q = cur.q, k = step, h = hot(), am = P.isAmPair(q);
-    var x0 = 96, xE = W - 60, sw = (xE - x0) / DC_SYMS, bh = 12, ys = [52, 72];
-    var vw = 12, ch = 8, yOut = 150, hOut = DC_ROWS * ch;
+    var x0 = 96, xE = W - 60, sw = (xE - x0) / DC_SYMS, bh = 12;
+    var vw = 12, ch = 8, hOut = DC_ROWS * ch, yOut = rx ? 60 : 150, ys = rx ? [yOut + hOut + 48, yOut + hOut + 68] : [52, 72];
     function laneX(p) { return Math.round(x0 + (xE - x0) * (p + 0.5) / 8 - vw / 2); }
     function fill(w, i) { return distFill(q, w, i); }
-    label('in: codewords A and B, 544 ten-bit symbols each; out: tx_out symbol 8k + p → PCS lane p →', x0, 18, th.ink, 11, 'left', 600);
-    // The two codewords, like the pre-FEC stream; dealt symbols fade while stepping.
+    label(rx ? 'in: PCS lanes 0–7 in order after reorder; out: lane p, lane symbol k → rx symbol 8k + p → codewords A and B'
+      : 'in: codewords A and B, 544 ten-bit symbols each; out: tx_out symbol 8k + p → PCS lane p →', x0, 18, th.ink, 11, 'left', 600);
+    // The two codewords, like the pre-FEC stream. TX: dealt symbols fade while
+    // stepping. RX: a symbol appears once it has been taken off its lane.
     [0, 1].forEach(function (w) {
       var y = ys[w];
       label('codeword ' + cwName(w), 8, y + bh / 2, th.ink, 11, 'left', 700);
+      if (rx) box(x0, y, xE - x0, bh, null, th.rule);
       for (var i = 0; i < DC_SYMS; i++) {
-        if (stepping && k > dcOrder(w, i)) ctx.globalAlpha = 0.28;
+        var o = dcOrder(w, i);
+        if (rx && stepping && k <= o) continue;
+        if (!rx && stepping && k > o) ctx.globalAlpha = 0.28;
         box(x0 + i * sw, y, sw + 0.5, bh, fill(w, i));
         ctx.globalAlpha = 1;
       }
@@ -569,80 +621,100 @@
       label('PCS ' + p, x + vw / 2, yOut - 14, th.ink, 11, 'center', 700);
       box(x, yOut, vw, hOut, null, th.rule);
       for (var r = 0; r < DC_ROWS; r++) {
-        var id = P.laneSymbolId(p, r);
-        if (!stepping || k > 8 * r + p) box(x, yOut + r * ch, vw, ch + 0.5, fill(id.w, id.i));
+        var id = P.laneSymbolId(p, r), taken = stepping && k > 8 * r + p;
+        if (rx) {
+          if (taken) ctx.globalAlpha = 0.28;
+          box(x, yOut + r * ch, vw, ch + 0.5, fill(id.w, id.i));
+          ctx.globalAlpha = 1;
+        } else if (!stepping || taken) box(x, yOut + r * ch, vw, ch + 0.5, fill(id.w, id.i));
         if (r % 4 === 0) label(cwName(id.w) + id.i, x + vw + 5, yOut + r * ch + ch / 2, th.muted, 9);
       }
       for (var r2 = 1; r2 < DC_ROWS; r2++) pfDash(x, yOut + r2 * ch, x + vw, yOut + r2 * ch);
       label('⋮ 135', x + vw / 2, yOut + hOut + 12, th.muted, 10, 'center');
     }
-    // The route of the symbol just dealt, while stepping: tx_out s → lane s mod 8, row s >> 3.
+    // The route of the symbol just moved, while stepping: symbol s ↔ lane s mod 8, row s >> 3.
     if (h >= 0) {
       var tp = h & 7, tr = h >> 3, tid = P.laneSymbolId(tp, tr), sy = ys[tid.w];
       var cx = x0 + (tid.i + 0.5) * sw, tx = laneX(tp), ty = yOut + tr * ch + ch / 2, side = tx < cx ? tx + vw + 2 : tx - 2;
       var dir = tx < cx ? 1 : -1;
       ctx.strokeStyle = th.ink; ctx.fillStyle = th.ink; ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.moveTo(cx, sy + bh + 2);
-      ctx.bezierCurveTo(cx, ty, (cx + side) / 2, ty, side, ty); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(side, ty); ctx.lineTo(side + 7 * dir, ty - 4); ctx.lineTo(side + 7 * dir, ty + 4); ctx.closePath(); ctx.fill();
+      if (rx) {
+        ctx.beginPath(); ctx.moveTo(side, ty);
+        ctx.bezierCurveTo((cx + side) / 2, ty, cx, ty, cx, sy - 8); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx, sy - 2); ctx.lineTo(cx - 4, sy - 9); ctx.lineTo(cx + 4, sy - 9); ctx.closePath(); ctx.fill();
+      } else {
+        ctx.beginPath(); ctx.moveTo(cx, sy + bh + 2);
+        ctx.bezierCurveTo(cx, ty, (cx + side) / 2, ty, side, ty); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(side, ty); ctx.lineTo(side + 7 * dir, ty - 4); ctx.lineTo(side + 7 * dir, ty + 4); ctx.closePath(); ctx.fill();
+      }
       box(x0 + tid.i * sw - 1, sy - 2, sw + 2, bh + 4, null, th.ink, 2);
       box(tx - 2, yOut + tr * ch - 2, vw + 4, ch + 4, null, th.ink, 2);
     }
-    var yc = yOut + hOut + 36;
-    label('lane p, lane symbol k = codeword symbol 4k + ⌊p/2⌋; even lanes take A on even k, B on odd k, odd lanes the reverse (119.2.4.8)', x0, yc, th.ink, 10, 'left', 600);
+    var yc = rx ? ys[1] + bh + 40 : yOut + hOut + 36;
+    label(rx ? 'lane symbol k of PCS lane p is codeword symbol 4k + ⌊p/2⌋ of A or B: the inverse of symbol distribution (119.2.4.8), so every lane must be in place'
+      : 'lane p, lane symbol k = codeword symbol 4k + ⌊p/2⌋; even lanes take A on even k, B on odd k, odd lanes the reverse (119.2.4.8)', x0, yc, th.ink, 10, 'left', 600);
     label(am ? 'lane colour = that lane’s 120-bit marker (lane symbols 0–11), as in AM insertion · amber = pad and status · grey = data'
       : 'grey = data · dashed lines = 10-bit symbol boundaries', x0, yc + 18, th.muted, 10);
   }
 
-  /* ---- symbol distribution: A and B on the left, 8 PCS lanes on the right ---- */
-  function drawDist(W) {
+  /* ---- symbol distribution: A and B on the left, 8 PCS lanes on the right.
+     rx: de-interleave, the 8 PCS lanes on the left, A and B on the right. ---- */
+  function drawDist(W, rx) {
     var q = cur.q, u = cur.u, k0 = 4 * u, i0 = 4 * k0, k = step, h = hot();
-    var mid = Math.round(W * 0.47), x0 = 96, lw = (mid - 30 - x0) / 16, rx = mid + 74, rw = (W - 16 - rx) / 4;
-    var rh = 30, y0 = 50, yA = y0 + 3 * rh - 6, yB = yA + 2 * rh + 12, am = P.isAmPair(q) && u < P.AM_UNITS;
-    label('in: codewords A and B, symbols ' + i0 + '–' + (i0 + 15), x0, 18, th.ink, 11, 'left', 600);
-    label('out: PCS lanes, lane symbols ' + k0 + '–' + (k0 + 3), rx - 60, 18, th.ink, 11, 'left', 600);
+    var mid = Math.round(W * (rx ? 0.5 : 0.47)), rh = 30, y0 = 50, yA = y0 + 3 * rh - 6, yB = yA + 2 * rh + 12, am = P.isAmPair(q) && u < P.AM_UNITS;
+    // cx/lw: the codeword tiles; lx/rw: the lane cells.
+    var cx0 = rx ? mid + 96 : 96, lw = rx ? (W - 16 - cx0) / 16 : (mid - 30 - cx0) / 16;
+    var lx = rx ? 128 : mid + 74, rw = rx ? (mid - 30 - lx) / 4 : (W - 16 - lx) / 4;
+    var cwIn = 'codewords A and B, symbols ' + i0 + '–' + (i0 + 15), lnIn = 'PCS lanes, lane symbols ' + k0 + '–' + (k0 + 3);
+    label('in: ' + (rx ? lnIn : cwIn), rx ? 8 : cx0, 18, th.ink, 11, 'left', 600);
+    label('out: ' + (rx ? cwIn : lnIn), rx ? cx0 - 88 : lx - 60, 18, th.ink, 11, 'left', 600);
     // Lane symbol kk of lane p is codeword symbol 4kk + (p >> 1) of A or B, so
     // codeword symbol i sits at lane symbol i >> 2, on lane 2(i & 3) + (w xor parity of i >> 2).
     function dest(w, i) { var kk = i >> 2; return { p: 2 * (i & 3) + (w ^ (kk & 1)), kk: kk }; }
-    // tx_out order within the window: symbol 8c + p goes to lane p, column c.
+    // Symbol order within the window: symbol 8c + p is lane p, column c.
     function order(p, c) { return 8 * c + p; }
     [0, 1].forEach(function (w) {
       var y = w ? yB : yA;
-      label('codeword ' + cwName(w), 8, y + rh / 2, th.ink, 11, 'left', 700);
+      label('codeword ' + cwName(w), rx ? cx0 - 88 : 8, y + rh / 2, th.ink, 11, 'left', 700);
       for (var n = 0; n < 16; n++) {
-        var i = i0 + n, d = dest(w, i), o = order(d.p, d.kk - k0), x = x0 + n * lw, f = distFill(q, w, i);
-        if (stepping && k > o) ctx.globalAlpha = 0.28;
+        var i = i0 + n, d = dest(w, i), o = order(d.p, d.kk - k0), x = cx0 + n * lw, f = distFill(q, w, i);
+        // TX: faded once dealt. RX: empty until taken off its lane.
+        if (rx && k <= o) { box(x + 1, y, lw - 2, rh, null, th.rule); continue; }
+        if (!rx && stepping && k > o) ctx.globalAlpha = 0.28;
         box(x + 1, y, lw - 2, rh, f);
         var s = fit([cwName(w) + i, String(i), String(i % 100)], lw - 2, 10, 600);
         if (s) label(s, x + lw / 2, y + rh / 2, onFill(f), 10, 'center', 600);
         ctx.globalAlpha = 1;
       }
     });
-    arrow(mid - 22, mid + 14, (yA + yB + rh) / 2);
+    if (rx) arrow(mid - 14, mid + 22, (yA + yB + rh) / 2); else arrow(mid - 22, mid + 14, (yA + yB + rh) / 2);
     for (var p = 0; p < 8; p++) {
       var y = y0 + p * (rh + 6) - 6;
-      box(rx - 64, y + 7, 8, rh - 14, th.lanes[p]);
-      label('PCS ' + p, rx - 50, y + rh / 2, th.ink, 11, 'left', 600);
+      box(lx - 64, y + 7, 8, rh - 14, th.lanes[p]);
+      label('PCS ' + p, lx - 50, y + rh / 2, th.ink, 11, 'left', 600);
       for (var c = 0; c < 4; c++) {
-        var id = P.laneSymbolId(p, k0 + c), x = rx + c * rw, o = order(p, c);
-        if (k <= o) { box(x + 1, y, rw - 2, rh, null, th.rule); continue; }
+        var id = P.laneSymbolId(p, k0 + c), x = lx + c * rw, o = order(p, c);
+        if (!rx && k <= o) { box(x + 1, y, rw - 2, rh, null, th.rule); continue; }
         var cs = P.cwSymbol(q, id.w, id.i), f = distFill(q, id.w, id.i);
+        if (rx && stepping && k > o) ctx.globalAlpha = 0.28;
         box(x + 1, y, rw - 2, rh, f);
         label(fit([cwName(id.w) + id.i + ' = ' + P.hex(cs.value, 3), cwName(id.w) + id.i], rw - 2, 10, 600), x + rw / 2, y + rh / 2, onFill(f), 10, 'center', 600);
+        ctx.globalAlpha = 1;
         if (o === h) {
           box(x - 1, y - 2, rw + 2, rh + 4, null, th.ink, 2);
-          var n2 = id.i - i0, ly = id.w ? yB : yA, lx = x0 + n2 * lw;
-          box(lx - 1, ly - 2, lw + 2, rh + 4, null, th.ink, 2);
+          var n2 = id.i - i0, ly = id.w ? yB : yA, tx = cx0 + n2 * lw;
+          box(tx - 1, ly - 2, lw + 2, rh + 4, null, th.ink, 2);
           ctx.strokeStyle = th.ink; ctx.lineWidth = 1.2; ctx.beginPath();
-          var sy = id.w ? ly + rh + 2 : ly - 2;
-          ctx.moveTo(lx + lw / 2, sy); ctx.bezierCurveTo(lx + lw / 2, id.w ? sy + 30 : sy - 30, x - 40, y + rh / 2, x - 1, y + rh / 2); ctx.stroke();
+          var sy = id.w ? ly + rh + 2 : ly - 2, ex = rx ? x + rw + 1 : x - 1;
+          ctx.moveTo(tx + lw / 2, sy); ctx.bezierCurveTo(tx + lw / 2, id.w ? sy + 30 : sy - 30, rx ? ex + 40 : ex - 40, y + rh / 2, ex, y + rh / 2); ctx.stroke();
         }
       }
     }
     var yc = y0 + 8 * (rh + 6) + 6;
-    label('tx_out symbol s goes to PCS lane s mod 8; lane p gets codeword symbol 4k + ⌊p/2⌋ of A or B at lane symbol k (119.2.4.8)', x0, yc, th.ink, 10, 'left', 600);
-    label(am ? 'alignment-marker symbols: each lane receives its own 120-bit marker, 10 bits at a time, in that lane’s colour'
-      : 'grey = data' + (i0 + 15 >= P.CW_K ? ', darker grey = parity' : '') + ' · lane colour marks alignment-marker symbols, amber the pad and status', x0, yc + 18, th.muted, 10);
+    label(rx ? 'lane symbol k of PCS lane p goes back to codeword symbol 4k + ⌊p/2⌋ of A or B, read in order 8k + p (inverse of 119.2.4.8)'
+      : 'tx_out symbol s goes to PCS lane s mod 8; lane p gets codeword symbol 4k + ⌊p/2⌋ of A or B at lane symbol k (119.2.4.8)', 8 + (rx ? 0 : 88), yc, th.ink, 10, 'left', 600);
+    label(am ? 'alignment-marker symbols: each lane ' + (rx ? 'gives back' : 'receives') + ' its own 120-bit marker, 10 bits at a time, in that lane’s colour'
+      : 'grey = data' + (i0 + 15 >= P.CW_K ? ', darker grey = parity' : '') + ' · lane colour marks alignment-marker symbols, amber the pad and status', 8 + (rx ? 0 : 88), yc + 18, th.muted, 10);
   }
 
   /* ---- AM insertion and PMA bit-mux ---- */
@@ -665,11 +737,11 @@
     if (k <= AM_HALF) return 0;
     return k <= AM_HALF + AM_CHUNK ? 1 : 2;
   }
-  function amStatus(k) {
+  function amStatus(k, rx) {
     var c = amLive(k), n = amFill(c, k);
     if (c === 0) return 'chunk 0: 257-bit data blocks arriving, ' + num(n) + ' of ' + num(AM_STD);
-    if (n <= P.AM_SLOTS) return 'chunk ' + (c - 1) + ' is full. Chunk ' + c + ' starts with AM block ' + n + ' of 4';
-    if (n < AM_STD) return 'chunk ' + c + ': AM group in, data blocks arriving, ' + num(n - P.AM_SLOTS) + ' of ' + num(AM_STD - P.AM_SLOTS);
+    if (n <= P.AM_SLOTS) return 'chunk ' + (c - 1) + ' is full. Chunk ' + c + ' starts with AM block ' + n + ' of 4' + (rx ? ', removed' : '');
+    if (n < AM_STD) return 'chunk ' + c + ': AM group ' + (rx ? 'removed' : 'in') + ', data blocks arriving, ' + num(n - P.AM_SLOTS) + ' of ' + num(AM_STD - P.AM_SLOTS);
     return 'chunk ' + c + ' is full: ' + num(AM_STD) + ' blocks. The next chunk starts with its own 4 AM blocks';
   }
   // Step of the close-up below, driven by chunk 1: AM blocks one at a time,
@@ -678,12 +750,12 @@
     var n = amFill(1, k);
     return n <= P.AM_SLOTS ? n : Math.min(2 * P.PAIR_SLOTS, P.AM_SLOTS + Math.round((n - P.AM_SLOTS) * AM_DATA * (P.PAIR_SLOTS - P.AM_SLOTS) / (AM_STD - P.AM_SLOTS)));
   }
-  function amPeriod(W, k) {
+  function amPeriod(W, k, rx) {
     var x0 = 70, xR = W - 16, y = 44, h = 22, gap = 6, live = amLive(k);
     var cw = (xR - x0 - 2 * gap) / 2.5, aw = Math.max(40, Math.min(56, cw * 0.14));
     var xs = [x0, x0 + cw / 2 + gap, x0 + 1.5 * cw + 2 * gap], ws = [cw / 2, cw, cw];
     var full = mix(th.edge, th.paper, 0.15), empty = mix(th.edge, th.paper, 0.85), amEmpty = mix(th.am, th.paper, 0.75);
-    label('802.3 Figure 119–6: 4 AM blocks inserted every ' + num(AM_STD) + ' × 257-bit blocks', x0, 12, th.ink, 11, 'left', 600);
+    label('802.3 Figure 119–6: 4 AM blocks ' + (rx ? 'removed' : 'inserted') + ' every ' + num(AM_STD) + ' × 257-bit blocks', x0, 12, th.ink, 11, 'left', 600);
     for (var c = 0; c < 3; c++) {
       var x = xs[c], w = ws[c], n = amFill(c, k), a = c ? aw : 0, dx = x + a, dw = w - a, head = x;
       // Chunk 0 shows only its second half; the first half has already passed.
@@ -718,8 +790,8 @@
       box(x + w / 2 - tw / 2, yd - 7, tw, 14, th.paper);
       label(txt, x + w / 2, yd, th.muted, 10, 'center');
     }
-    label(amStatus(k), x0, y + h + 40, th.ink, 11, 'left', 600);
-    label('below: chunk 1’s AM insertion (outlined) close up. The lab’s 3D view repeats every ' + AM_LAB + ' blocks so markers stay on screen.', x0, y + h + 58, th.muted, 10);
+    label(amStatus(k, rx), x0, y + h + 40, th.ink, 11, 'left', 600);
+    label('below: chunk 1’s AM ' + (rx ? 'removal' : 'insertion') + ' (outlined) close up. The lab’s 3D view repeats every ' + AM_LAB + ' blocks so markers stay on screen.', x0, y + h + 58, th.muted, 10);
   }
 
   // Tile layout of the AM close-up, shared by drawing and click hit-testing.
@@ -745,8 +817,9 @@
     return first + s - P.AM_SLOTS;
   }
 
-  function drawAm(W) {
-    amPeriod(W, step);
+  // rx: AM removal. Before, the group fills slots 0-3; after, they are empty.
+  function drawAm(W, rx) {
+    amPeriod(W, step, rx);
     var q = cur.q, g = amGeo(W), x0 = g.x0, sw = g.sw, hh = g.hh, k = amDetail(step);
     var y1 = g.rows[0][0], y1n = g.rows[0][1], y2 = g.rows[1][0], y2n = g.rows[1][1];
     var b0 = amSlotBlock(P.PAIR_SLOTS);
@@ -765,26 +838,38 @@
     }
     for (var s = 0; s < 40; s++) {
       var x = x0 + s * sw, sl = P.slot257(q * 40 + s);
-      if (sl.am) box(x + 1, y1, sw - 2, hh, null, th.rule);
-      else tile(x, y1, sl.block);
-      if (sl.am) continue;
+      if (sl.am) { box(x + 1, y1, sw - 2, hh, null, th.rule); continue; }
+      tile(x, y1, sl.block);
       if (s < k) tile(x, y2, sl.block); else box(x + 1, y2, sw - 2, hh, null, th.rule);
     }
-    // The AM group falls from the gap in the before row into the after row.
-    for (var a = 0; a < P.AM_SLOTS; a++) if (a >= k) box(x0 + a * sw + 1, y2, sw - 2, hh, null, th.rule);
-    if (k > 0) {
-      var fall = Math.min(1, k / 4), gy = y1 + (y2 - y1) * fall, bw = (4 * sw - 2) / 103;
+    // The 1028-bit group: TX, it falls from the gap in the before row into the
+    // after row. RX, it lifts out of the before row and its slots stay empty.
+    function group(gy) {
+      var bw = (4 * sw - 2) / 103;
       for (var n = 0; n < 96; n++) {
         var t = n >> 3, r = n & 7, j = r >> 1, lane = (t % 2 === 0) === ((r & 1) === 0) ? 2 * j : 2 * j + 1;
         box(x0 + 1 + n * bw, gy, bw + 0.3, hh, th.lanes[lane]);
       }
       box(x0 + 1 + 96 * bw, gy, 7 * bw, hh, th.am);
-      label('am_mapped<1027:0>', x0 + 2 * sw, gy - 9, th.ink, 10, 'center', 600);
     }
-    label('rate matching has left 4 block slots (1028 bits) empty', x0, y1 - 12, th.muted, 10);
-    label('4 AM blocks (1028 bits), then the 257-bit blocks resume', x0, y2n + hh + 22, th.ink, 11, 'left', 600);
+    if (rx) {
+      for (var a2 = 0; a2 < P.AM_SLOTS; a2++) box(x0 + a2 * sw + 1, y2, sw - 2, hh, null, th.rule);
+      var lift = Math.min(1, k / 4);
+      ctx.globalAlpha = 1 - 0.72 * lift; group(y1 - 14 * lift); ctx.globalAlpha = 1;
+      label(k ? 'am_mapped<1027:0> removed' : 'am_mapped<1027:0>', x0 + 2 * sw, y1 - 14 * lift - 9, th.ink, 10, 'center', 600);
+    } else {
+      for (var a = 0; a < P.AM_SLOTS; a++) if (a >= k) box(x0 + a * sw + 1, y2, sw - 2, hh, null, th.rule);
+      if (k > 0) {
+        var gy = y1 + (y2 - y1) * Math.min(1, k / 4);
+        group(gy);
+        label('am_mapped<1027:0>', x0 + 2 * sw, gy - 9, th.ink, 10, 'center', 600);
+      }
+      label('rate matching has left 4 block slots (1028 bits) empty', x0, y1 - 12, th.muted, 10);
+    }
+    label(rx ? 'the 4 AM blocks (1028 bits) are taken out; the 257-bit blocks pass on unchanged' : '4 AM blocks (1028 bits), then the 257-bit blocks resume', x0, y2n + hh + 22, th.ink, 11, 'left', 600);
     label('slots 40–79: 40 regular 257-bit blocks, no AM until 81,920 blocks after this group', x0, y2n + hh + 40, th.muted, 10);
-    label('colours = which lane’s marker each 10 bits belong to · number in a tile = 257-bit block · click a slot to see its bits', x0, y2n + hh + 56, th.muted, 10);
+    label(rx ? 'colours = which lane’s marker each 10 bits belong to · number in a tile = 257-bit block · slots 0–3 are left empty'
+      : 'colours = which lane’s marker each 10 bits belong to · number in a tile = 257-bit block · click a slot to see its bits', x0, y2n + hh + 56, th.muted, 10);
     // The picked slot, outlined in both the before and after rows.
     if (pick >= 0) {
       var px = x0 + (pick % 40) * sw, r = pick < 40 ? 0 : 1;
@@ -1232,6 +1317,247 @@
   }
 
 
+  /* ---- Stage 9: the receive mirror of each TX view. RX positions lag by the
+     deskew delay (packets.js), so a box holds the pair that left it that much
+     later. Each view is its TX view read the other way, input on top. ---- */
+  function pairAtRx(x) {
+    var t = (S.u - P.rxLag() - x) / UPAIR, q = Math.floor(t);
+    return { q: q, f: t - q };
+  }
+  function rxU(view) { return S.u - P.rxLag() - boxMid(view); }
+
+  VIEWS.deint = { title: 'De-interleave', stage: 9, steps: 32, rate: 8, h: 376,
+    at: function () { var p = pairAtRx(boxMid('deint')); return { q: p.q, u: Math.min(P.UNITS_PER_PAIR - 1, Math.floor(p.f * P.UNITS_PER_PAIR)) }; },
+    nav: VIEWS.dist.nav,
+    where: function (c) {
+      return 'Pair ' + c.q + ': lane symbols ' + 4 * c.u + '–' + (4 * c.u + 3) + ' of 136 on every PCS lane → A and B symbols ' + 16 * c.u + '–' + (16 * c.u + 15) +
+        (P.isAmPair(c.q) && c.u < P.AM_UNITS ? ' (alignment marker)' : '');
+    } };
+  var DEINT_CONCEPT = { title: 'De-interleave · Overview', steps: DC_STEPS, rate: 12, h: 352,
+    nav: DIST_CONCEPT.nav,
+    where: function (c) { return 'Pair ' + c.q + ': lane symbols 0–' + (DC_ROWS - 1) + ' of 136 on PCS lanes 0–7 → A0–A' + (DC_SYMS - 1) + ' and B0–B' + (DC_SYMS - 1); } };
+
+  VIEWS.postfec = { title: 'Post-FEC interleave · Interleave details', stage: 9, steps: PF_SYMS, rate: 3, h: 346,
+    at: function () {
+      var p = pairAtRx(boxMid('postfec')), j = Math.floor(p.f * 1028) - PF_SYMS / 2;
+      return { q: p.q, j: Math.max(0, Math.min(PF_LAST, j - mod(j, 2))) };
+    },
+    nav: VIEWS.prefec.nav,
+    where: function (c) {
+      var n = PF_SYMS / 2 - 1;
+      return 'Pair ' + c.q + ': A' + c.j / 2 + '–A' + (c.j / 2 + n) + ' and B' + c.j / 2 + '–B' + (c.j / 2 + n) + ' → stream symbols ' + c.j + '–' + (c.j + PF_SYMS - 1) + ' of 1028';
+    } };
+  var PF_CONCEPT_RX = { title: 'Post-FEC interleave · Overview', steps: PF_CON, rate: 6, h: 432,
+    nav: PF_CONCEPT.nav,
+    where: function (c) { return 'Pair ' + c.q + ': m_A and m_B, 514 symbols each → 1028 ten-bit symbols → 40 × 257 = 10,280 bits'; } };
+
+  VIEWS.amr = { title: 'AM removal', stage: 9, steps: AM_STEPS, rate: 6, h: 448,
+    at: function () { var q = pairAtRx(boxMid('amr')).q; return { q: q - mod(q, P.AM_PAIRS) }; },
+    nav: VIEWS.am.nav,
+    where: function (c) {
+      var b = P.slot257(c.q * P.PAIR_SLOTS + P.AM_SLOTS).block;
+      return 'AM removal ' + c.q / P.AM_PAIRS + ': 4 AM blocks out, 257-bit blocks ' + b + '–' + (b + 2 * P.PAIR_SLOTS - P.AM_SLOTS - 1) + ' pass on';
+    } };
+
+  VIEWS.r257 = { title: 'Reverse transcode', stage: 9, steps: 5, rate: 2.5, h: 306,
+    at: function () { return { s: nextData257(Math.round(rxU('r257') / U257), 1) }; },
+    nav: VIEWS.b257.nav,
+    where: function (c) {
+      var sl = P.slot257(c.s);
+      return '257-bit block ' + sl.block + ' (slot ' + (sl.r + 1) + ' of 40, pair ' + sl.q + ') → 66-bit blocks ' + 4 * sl.block + '–' + (4 * sl.block + 3);
+    } };
+
+  VIEWS.d66 = { title: '64B/66B decode', stage: 9, steps: 9, rate: 3, h: 300,
+    at: function () { return { t: nextData66(Math.round(rxU('d66') / U66), 1) }; },
+    nav: VIEWS.b66.nav,
+    where: function (c) { var b = P.slot66(c.t).block; return '66-bit block ' + b + ' → 200GMII transfer ' + b; } };
+
+  /* RS(544,514) decode. Errors come from the fault lab's noise (lanes it hits,
+     as many per codeword as the noise makes likely) or from a count picked in
+     the view; rsDecode (rs.js) then really finds and fixes them. */
+  var rsErr = null, RS_STEPS = P.CW_P + 1, rsMemo = {};
+  function rsErrCount() { return rsErr !== null ? rsErr : Math.min(20, Math.round(P.fecExpect(P.serByLane()).lam)); }
+  // The received codeword w of pair q, the errors in it and what the decoder makes of it.
+  function rsRx(q, w) {
+    var n = rsErrCount(), F = S.faults, lab = rsErr === null && F.noise > 0;
+    var key = [q, w, n, lab ? F.noiseLane : 'x', S.width, P.payloadVersion].join(':');
+    if (rsMemo[w] && rsMemo[w].key === key) return rsMemo[w];
+    var truth = [], cands = [];
+    for (var i = 0; i < P.CW_N; i++) {
+      truth.push(P.cwSymbol(q, w, i).value);
+      // Symbol i of codeword w travels on PCS lane 2(i & 3) + (w xor parity of i >> 2).
+      var lane = S.link.lanes[2 * (i & 3) + (w ^ ((i >> 2) & 1))];
+      if (!lab || F.noiseLane < 0 || lane.serdes === F.noiseLane) cands.push(i);
+    }
+    var rx = truth.slice(), bad = [], seed = 2 * q + w + 7;
+    for (var m = 0; bad.length < Math.min(n, cands.length) && m < 4000; m++) {
+      var at = cands[Math.floor(P.hash(seed, m) * cands.length)];
+      if (bad.indexOf(at) >= 0) continue;
+      bad.push(at); rx[at] ^= 1 + Math.floor(P.hash(at, seed + 99) * 1023);
+    }
+    var dec = P.rsDecode(rx), right = dec.cw.every(function (v, i) { return v === truth[i]; });
+    var isBad = {}; bad.forEach(function (b) { isBad[b] = true; });
+    rsMemo[w] = { key: key, n: bad.length, rx: rx, bad: isBad, list: bad.sort(function (a, b) { return a - b; }), dec: dec,
+      res: !bad.length ? 'none' : dec.ok && right ? 'fixed' : dec.ok ? 'wrong' : 'fail' };
+    return rsMemo[w];
+  }
+  VIEWS.rsdec = { title: 'RS(544,514) decode', stage: 9, steps: RS_STEPS, rate: 8, h: 326,
+    at: function () { return { q: pairAtRx(boxMid('rsdec')).q }; },
+    nav: VIEWS.rs.nav,
+    where: function (c) { var n = rsErrCount(); return 'Codeword pair ' + c.q + ': A and B, 544 received symbols each → 514 · ' + n + ' symbol error' + (n === 1 ? '' : 's') + ' per codeword'; },
+    acts: function () {
+      return [null, 3, 15, 16].map(function (n) {
+        return { label: n === null ? 'Lab noise' : n + ' errors', on: rsErr === n,
+          title: n === null ? 'Errors as the fault lab’s noise makes them (none without noise)' : n + ' symbol errors in each codeword' + (n > P.RS_T ? ': one more than RS(544,514) can fix' : ''),
+          run: function () { rsErr = n; } };
+      });
+    } };
+  function drawRsDec(W) {
+    var q = cur.q, k = step, h = hot(), out = k >= RS_STEPS;
+    var x0 = 96, tw = Math.min(46, (W - 16 - x0 - 64) / 24.4), pw = tw * 0.62, th1 = 54, ph = 16, pg = 3, y0 = 44;
+    var px = x0 + 6 * tw + 10, ax = px + 10 * pw + 8, rx = ax + 36, sx = rx + 6 * tw + 10, idx = [0, 1, 2, -1, 512, 513];
+    label('in: received codeword, 544 symbols', x0, 18, th.ink, 11, 'left', 600);
+    label('out: message, 514 symbols', rx, 18, th.ink, 11, 'left', 600);
+    label('syndromes', sx, 18, th.ink, 11, 'left', 600);
+    function grid(x, y, p, fill, txt) {
+      var cx = x + (p % 10) * pw, cy = y + Math.floor(p / 10) * (ph + pg);
+      if (!fill) { box(cx + 0.5, cy, pw - 1, ph, null, th.rule); return; }
+      box(cx + 0.5, cy, pw - 1, ph, fill);
+      var fs = fit([txt], pw - 1, 9) ? 9 : fit([txt], pw, 8) ? 8 : fit([txt], pw + 1, 7) ? 7 : 0;
+      if (fs) label(txt, cx + pw / 2, cy + ph / 2, onFill(fill), fs, 'center');
+    }
+    var R = [0, 1].map(function (w) { return rsRx(q, w); });
+    [0, 1].forEach(function (w) {
+      var y = y0 + w * (th1 + 40), r = R[w], fixed = r.res === 'fixed';
+      label('codeword ' + cwName(w), 8, y + th1 / 2, th.ink, 11, 'left', 700);
+      idx.forEach(function (i, n) {
+        msgTile(x0 + n * tw, y, tw, th1, q, w, i, i < 0 ? undefined : r.rx[i], i >= 0 && r.bad[i]);
+        var xo = rx + n * tw;
+        if (i >= 0 && !out) { box(xo + 1, y, tw - 2, th1, null, th.rule); return; }
+        // Out: the corrected symbol, or the received one when the decoder gave up.
+        msgTile(xo, y, tw, th1, q, w, i, i < 0 ? undefined : fixed ? r.dec.cw[i] : r.rx[i], i >= 0 && !fixed && r.bad[i]);
+        if (i >= 0 && fixed && r.bad[i]) box(xo, y - 1, tw, th1 + 2, null, th.ink, 2);
+      });
+      for (var p = 0; p < P.CW_P; p++) grid(px, y, p, r.bad[P.CW_K + p] ? th.bad : th.ink, P.hex(r.rx[P.CW_K + p], 3));
+      arrow(ax, rx - 8, y + th1 / 2);
+      for (var j = 0; j < P.CW_P; j++) {
+        var sv = r.dec.syn[j];
+        grid(sx, y, j, j < k ? (sv ? th.bad : mix(th.edge, th.paper, 0.5)) : null, P.hex(sv, 3));
+        if (j === h) box(sx + (j % 10) * pw - 1, y + Math.floor(j / 10) * (ph + pg) - 1, pw + 1, ph + 2, null, th.am, 2);
+      }
+      label('544, as received', x0 + 3 * tw, y + th1 + 12, th.muted, 10, 'center');
+      label('30 parity, checked', px + 5 * pw, y + th1 + 12, th.muted, 10, 'center');
+      label('S_j = r(α^j)', sx + 5 * pw, y + th1 + 12, k ? th.ink : th.muted, 10, 'center', 600);
+      var names = r.list.map(function (i) { return cwName(w) + i; }).join(' ');
+      var msg = { none: ['514, no errors'], fixed: [r.n + ' fixed: ' + names, r.n + ' symbols fixed'], wrong: ['miscorrected: ' + r.n + ' errors'], fail: [r.n + ' errors: uncorrectable', 'uncorrectable'] }[r.res];
+      label(out ? fit(msg, 6 * tw + 4, 10, 600) : '514, after correction', rx + 3 * tw, y + th1 + 12, out && r.res !== 'none' ? (fixed ? th.ink : th.bad) : th.muted, 10, 'center', 600);
+    });
+    // Length to scale: 544 symbols in, with the errors marked; 514 out, parity dropped.
+    var yb = y0 + 2 * th1 + 74, bw = W - 16 - x0, barH = 12, gap = 4;
+    var hw = (bw - gap) / 2, pm = hw * 514 / 544;
+    label('in', 8, yb + barH / 2, th.ink, 11, 'left', 600);
+    label('out', 8, yb + barH + gap + barH / 2, th.ink, 11, 'left', 600);
+    [0, 1].forEach(function (w) {
+      var bx = x0 + w * (hw + gap), c = w ? th.b : th.a, r = R[w], yo = yb + barH + gap;
+      label('codeword ' + cwName(w), bx + hw / 2, yb - 11, c, 9, 'center', 600);
+      box(bx, yb, pm, barH, c);
+      box(bx + pm, yb, hw - pm, barH, th.ink);
+      if (out) box(bx, yo, pm, barH, c);
+      box(bx, yo, hw, barH, null, th.rule);
+      r.list.forEach(function (i) {
+        var ex = bx + i * hw / 544, ew = Math.max(2, hw / 544);
+        box(ex, yb, ew, barH, th.bad);
+        if (out && r.res !== 'fixed' && i < P.CW_K) box(ex, yo, ew, barH, th.bad);
+      });
+    });
+    label('to scale: 544 symbols in; the 514 message symbols out, corrected; the 30 parity symbols are dropped', x0, yb + 2 * barH + gap + 16, th.ink, 10, 'left', 600);
+    label('red = symbols hit by errors · ' + (rsErr === null ? 'errors follow the fault lab’s noise, so none without it; pick a count below to try more' : rsErr + ' errors in each codeword, placed at random'),
+      x0, yb + 2 * barH + gap + 34, th.muted, 10);
+    label('30 zero syndromes = a valid codeword · otherwise Berlekamp–Massey, Chien and Forney fix up to 15 bad symbols (Clause 91)', x0, yb + 84, th.muted, 10);
+  }
+
+  /* ---- 64B/66B decode: the 66-bit block on top, its 8 bytes on 200GMII below ---- */
+  function drawD66(W) {
+    var blk = P.slot66(cur.t).block, start = 8 * blk, k = step, h = hot();
+    var x0 = 116, hw = 54, gap = 8, tw = Math.min(84, (W - x0 - hw - gap - 16) / 8);
+    var xb = x0 + hw + gap, yIn = 44, yOut = 150, th1 = 66;
+    label('in: one 66-bit block, sync header 01 = all data', x0, 18, th.ink, 11, 'left', 600);
+    label('66-bit block', 8, yIn + th1 / 2 - 8, th.ink, 11, 'left', 600);
+    label('66 bits in', 8, yIn + th1 / 2 + 8, th.muted, 10);
+    label('200GMII', 8, yOut + th1 / 2 - 8, th.ink, 11, 'left', 600);
+    label('64 bits out', 8, yOut + th1 / 2 + 8, th.muted, 10);
+    for (var b = 0; b < 8; b++) {
+      var c = P.byteAt(start + b), x = xb + b * tw, fill = b & 1 ? th.byte1 : th.byte0;
+      byteTile(x + 1, yIn, tw - 2, th1, c, fill, false);
+      byteTile(x + 1, yOut, tw - 2, th1, c, fill, k < b + 2);
+      if (h === b + 1) { box(x + 1, yIn, tw - 2, th1, null, th.ink, 2); box(x + 1, yOut, tw - 2, th1, null, th.ink, 2); }
+      if (k >= b + 2) {
+        ctx.strokeStyle = th.rule; ctx.setLineDash([2, 3]); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x + tw / 2, yIn + th1 + 3); ctx.lineTo(x + tw / 2, yOut - 3); ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+    if (stepping && k >= 1) ctx.globalAlpha = 0.28;
+    hdrTile(x0, yIn, hw, th1, '01', 'sync', false);
+    ctx.globalAlpha = 1;
+    if (h === 0) box(x0, yIn, hw, th1, null, th.am, 3);
+    label('64 bits = 8 bytes, unchanged', xb + 4 * tw, yIn + th1 + 14, th.muted, 10, 'center');
+    label(k >= 1 ? '− sync header' : 'sync header', x0 + hw / 2, yIn + th1 + 14, k >= 1 ? th.ink : th.muted, 10, 'center', 600);
+    // The 66 bits in the order they arrived.
+    var ys = yOut + th1 + 30, cw = (W - x0 - 16) / 66;
+    label('received in order', 8, ys + 9, th.muted, 10);
+    for (var n = 0; n < 66; n++) {
+      var bx = x0 + n * cw;
+      var bit = n < 2 ? '01'[n] : String((P.byteAt(start + ((n - 2) >> 3)) >> ((n - 2) & 7)) & 1);
+      var f = n < 2 ? th.ink : ((n - 2) >> 3) & 1 ? th.byte1 : th.byte0;
+      box(bx + 0.5, ys, cw - 1, 18, f);
+      if (cw > 8) label(bit, bx + cw / 2, ys + 9, onFill(f), 9, 'center');
+    }
+    label('bit 0 → bit 65 · header 10 would mean control characters, which this model leaves out', x0, ys + 30, th.muted, 10);
+  }
+
+  /* ---- reverse transcode: one 257-bit block on top, four 66-bit blocks below.
+     Header bit 1 says all four are data, so each gets its 01 header back. ---- */
+  function drawR257(W) {
+    var sl = P.slot257(cur.s), start = 32 * sl.block, k = step, h = hot();
+    var x0 = 76, H2 = 26, H1 = 16, rh = 44, yT = 50, yB = 186, xR = W - 16;
+    var dw = (xR - x0 - 4 * H2) / 4, bw = H2 + dw;
+    function dx(g) { return x0 + g * bw + H2; }     // where d_g starts in rx_coded_g
+    var xB = xR - H1 - 4 * dw;                      // rx_xcoded is packed and ends with rx_coded_3
+    function bx(g) { return xB + H1 + g * dw; }     // where d_g starts in rx_xcoded
+    label('in', 8, yT + rh / 2 - 7, th.ink, 11, 'left', 700);
+    label('257 bits', 8, yT + rh / 2 + 8, th.muted, 9);
+    label('out', 8, yB + rh / 2 - 7, th.ink, 11, 'left', 700);
+    label('4 × 66 bits', 8, yB + rh / 2 + 8, th.muted, 9);
+    label('rx_xcoded · 257-bit block ' + sl.block, (xB + xR) / 2, yT - 22, th.ink, 11, 'center', 600);
+    label('0', xB + 2, yT - 8, th.muted, 9);
+    label('256', xR - 2, yT - 8, th.muted, 9, 'right');
+    hdrTile(xB, yT, H1, rh, '1', '', false);
+    box(xB, yT, xR - xB, rh, null, th.ink);
+    if (h === 0) box(xB - 1, yT - 1, H1 + 2, rh + 2, null, th.am, 3);
+    for (var g = 0; g < 4; g++) {
+      var xb = x0 + g * bw, xd = dx(g), placed = k >= g + 2, src = start + 8 * g, xi = bx(g);
+      payload(xi, yT, dw, rh, src, false, placed && stepping);
+      if (g > 0) { ctx.fillStyle = th.ink; ctx.fillRect(xi - 0.75, yT, 1.5, rh); }
+      label('rx_coded_' + g, xb + bw / 2, yB - 36, th.ink, 11, 'center', 600);
+      label('66-bit block ' + (4 * sl.block + g), xb + bw / 2, yB - 22, th.muted, 9, 'center');
+      label('0', xb + 2, yB - 8, th.muted, 9);
+      label('2', xd + 2, yB - 8, th.muted, 9);
+      label('65', xb + bw - 2, yB - 8, th.muted, 9, 'right');
+      hdrTile(xb, yB, H2, rh, '01', '', !placed);
+      payload(xd, yB, dw, rh, src, !placed, false);
+      box(xb, yB, bw, rh, null, placed ? th.ink : th.rule);
+      label('d_' + g, (xd + xi) / 2 + dw / 2, (yT + rh + yB - 40) / 2, placed ? th.ink : th.muted, 11, 'center', 600);
+      // A boundary in rx_xcoded opens into a whole 01 header below.
+      if (k >= 1 && g === 0) dash(xi, yT + rh, xd, yB - 44);
+      if (placed && g > 0) { dash(xi, yT + rh, xb, yB - 44); dash(xi, yT + rh, xd, yB - 44); }
+      if (placed && g === 3) dash(xR, yT + rh, xR, yB - 44);
+      if (h === g + 1) { box(xi - 1, yT - 1, dw + 2, rh + 2, null, th.ink, 2); box(xd - 1, yB - 1, dw + 2, rh + 2, null, th.ink, 2); box(xb - 1, yB - 1, H2 + 2, rh + 2, null, th.am, 2); }
+    }
+    var yc = yB + rh + 30;
+    label('header bit 1: all four blocks are data, so each gets its sync header 01 back', x0, yc, th.ink, 10, 'left', 600);
+    label('d_0…d_3 are copied unchanged: 1 + 4 × 64 = 257 bits in, 4 × 66 = 264 bits out', x0, yc + 18, th.muted, 10);
+  }
+
   function muxHeight(rx) {
     var kk = muxK();
     return rx ? 184 + 22 * kk : 86 + 22 * kk + (P.WIDTHS[S.width].mod === 'PAM4' ? 152 : 76);
@@ -1241,11 +1567,18 @@
     prefec: function (W) { (page ? drawPrefec : drawPrefecConcept)(W); },
     rs: drawRs,
     dist: function (W) { (page ? drawDist : drawDistConcept)(W); },
-    mux: drawMux, demux: drawDemux, lock: drawLock, deskew: drawDeskew, reorder: drawReorder };
+    mux: drawMux, demux: drawDemux, lock: drawLock, deskew: drawDeskew, reorder: drawReorder,
+    deint: function (W) { (page ? drawDist : drawDistConcept)(W, true); },
+    rsdec: drawRsDec,
+    postfec: function (W) { (page ? drawPrefec : drawPrefecConcept)(W, true); },
+    amr: function (W) { drawAm(W, true); },
+    r257: drawR257, d66: drawD66 };
   // Views with two pages: the view in force on each, and the page names.
   var PAGES = {
     prefec: { v: function () { return page ? VIEWS.prefec : PF_CONCEPT; }, names: ['Overview', 'Distribution details'] },
-    dist: { v: function () { return page ? VIEWS.dist : DIST_CONCEPT; }, names: ['Overview', 'Detail'] }
+    dist: { v: function () { return page ? VIEWS.dist : DIST_CONCEPT; }, names: ['Overview', 'Detail'] },
+    deint: { v: function () { return page ? VIEWS.deint : DEINT_CONCEPT; }, names: ['Overview', 'Detail'] },
+    postfec: { v: function () { return page ? VIEWS.postfec : PF_CONCEPT_RX; }, names: ['Overview', 'Interleave details'] }
   };
   // The view in force: a two-page view has its own steps and size on each page.
   function view() { return PAGES[mode] ? PAGES[mode].v() : VIEWS[mode]; }
@@ -1381,7 +1714,7 @@
     if (!dlg || !VIEWS[m]) return;
     if (P.inspectorOpen && P.inspectorOpen()) P.closeInspector();
     if (S.playing) P.setPlaying(false);
-    mode = m; cur = VIEWS[m].at(); pick = -1; page = 0; muxPhase = null;
+    mode = m; cur = VIEWS[m].at(); pick = -1; page = 0; muxPhase = null; rsErr = null;
     step = view().steps; anim = stepping = false; acc = 0;
     $('opv-title').textContent = view().title;
     $('opv-note').textContent = NOTES[m];
@@ -1483,7 +1816,7 @@
       if (!mode || (what !== 'link' && what !== 'payload' && what !== 'fault')) return;
       if (what === 'link') muxPhase = null;
       // Views that read the link or fault lab start over, complete, on the new set-up.
-      if (/^(mux|demux|lock|deskew|reorder)$/.test(mode)) { step = view().steps; anim = stepping = false; size(); }
+      if (/^(mux|demux|lock|deskew|reorder|rsdec)$/.test(mode)) { step = view().steps; anim = stepping = false; size(); }
       sync();
     });
   };
