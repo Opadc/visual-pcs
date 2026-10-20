@@ -236,6 +236,8 @@ input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offs
 .opv-note { max-width: 88ch; }
 .opv-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--rule-2); padding-top: 8px; }
 .opv-foot .btn { min-height: 32px; padding: 2px 11px; font-size: 0.82rem; }
+.opv-acts { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.opv-acts .btn[aria-pressed="true"] { border-color: var(--ink); font-weight: 600; }
 .opv-sp { flex: 1; }
 .opv-count { font-family: var(--f-mono); font-size: 0.72rem; color: var(--muted); min-width: 4.5em; text-align: right; }
 .sd-lens { font-size: 0.9rem; }
@@ -666,6 +668,9 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
         <button type="button" class="btn" data-view="dist">Symbol distribution</button>
         <button type="button" class="btn" data-view="mux">Bit-mux</button>
         <button type="button" class="btn" data-view="demux">RX demux</button>
+        <button type="button" class="btn" data-view="lock">AM lock</button>
+        <button type="button" class="btn" data-view="deskew">Deskew</button>
+        <button type="button" class="btn" data-view="reorder">Lane reorder</button>
       </div>
       <span class="lens-hint">Input on the left, output on the right. Or click a box in the 3D view.</span>
     </div>
@@ -689,7 +694,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
         <button type="button" class="btn" data-act="next" id="opv-next" title="The unit after this one (→)">Next →</button>
         <span class="opv-sp"></span>
         <span class="opv-count" id="opv-count" aria-live="polite"></span>
-        <button type="button" class="btn" data-act="phase" id="opv-phase" title="Start the demux one bit later" hidden>Phase</button>
+        <span class="opv-acts" id="opv-acts"></span>
         <button type="button" class="btn" data-act="step" id="opv-step" title="Add one unit (.)">Step</button>
         <button type="button" class="btn primary" data-act="play" id="opv-play" title="Replay one unit at a time (P)">Animate</button>
       </footer>
@@ -863,7 +868,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     <li><a href="https://www.ieee802.org/3/bs/public/16_03/butter_3bs_02_0316.pdf">Alignment marker mapping and insertion</a>, IEEE P802.3bs task force</li>
     <li><a href="https://www.ieee802.org/3/bs/">IEEE P802.3bs 200 Gb/s and 400 Gb/s Ethernet Task Force</a></li>
   </ul>
-  <p class="fine">Counts and timings in the lab are scaled so you can watch them. AM spacing, lock thresholds and error rates are illustrative. Diagnostic readouts are conceptual; no register addresses or vendor names are implied.</p>
+  <p class="fine">Counts and timings in the lab are scaled so you can watch them. AM spacing and error rates are illustrative; the lock thresholds follow Figure 119–12. Diagnostic readouts are conceptual; no register addresses or vendor names are implied.</p>
 </section>
 </article>
 
@@ -883,8 +888,8 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
 
   P.N_PCS = 8;                 // 200GBASE-R PCS lanes
   P.DESKEW_CAP_NS = 180;       // skew budget at the PCS receive input (IEEE 802.3 Table 116-7)
-  P.AM_LOSS_COUNT = 3;         // conceptual: consecutive bad AMs before lock is dropped
-  P.AM_ACQUIRE_COUNT = 2;      // conceptual: matching AMs at the right spacing to lock
+  P.AM_LOSS_COUNT = 5;         // consecutive bad AMs before lock is dropped (amp_bad_count = 5, Figure 119-12)
+  P.AM_ACQUIRE_COUNT = 2;      // a marker, then the next naming the same PCS lane (FIND_1ST, COMP_2ND)
   // Scene lane cubes are 4 PCS-lane symbols (40 bits); a codeword pair is 136
   // symbols per lane, so 34 cubes. The first 3 cubes (12 symbols, 120 bits) of
   // an AM pair are that lane's alignment marker. The scene inserts an AM group
@@ -1622,9 +1627,9 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     { x: [31, 32.5], name: 'Symbol distribution', stage: 3, lane: true, short: 'Symbol dist.', view: 'dist' },
     { x: [44.5, 48.5], name: 'TX PMA bit-mux', stage: 5, lane: true, view: 'mux' },
     { x: [67.5, 70.5], name: 'RX PMA demux', stage: 7, lane: true, view: 'demux' },
-    { x: [71.5, 73.5], name: 'Alignment lock', stage: 8, lane: true, short: 'AM lock' },
-    { x: [74.5, 78.5], name: 'Deskew', stage: 8, lane: true },
-    { x: [79.5, 83.5], name: 'Lane reorder', stage: 8, lane: true },
+    { x: [71.5, 73.5], name: 'Alignment lock', stage: 8, lane: true, short: 'AM lock', view: 'lock' },
+    { x: [74.5, 78.5], name: 'Deskew', stage: 8, lane: true, view: 'deskew' },
+    { x: [79.5, 83.5], name: 'Lane reorder', stage: 8, lane: true, view: 'reorder' },
     { x: [85, 87], name: 'De-interleave', stage: 9, short: 'De-intlv' },
     { x: [87.5, 91], name: 'RS(544,514) decode', stage: 9, short: 'RS decode', fec: true },
     { x: [91.5, 93.5], name: 'Post-FEC interleave', stage: 9, short: 'Post-FEC' },
@@ -1667,7 +1672,8 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       lens: ['demux'] },
     { n: 8, side: 'RX', title: 'Alignment lock, deskew, lane reorder', span: [70.5, 85],
       body: '<p>The RX PCS hunts each PMA lane for the common AM pattern. When AMs repeat at the expected spacing, that lane has <b>alignment lock</b>, and the unique bytes say which PCS lane it is. With all lanes locked, the PCS lines their AMs up in a <b>deskew</b> buffer and <b>reorders</b> the lanes to 0..7.</p><p><b>align_status</b> becomes true only when all 8 lanes are locked and deskewed. This has to happen before FEC decode, because each codeword is spread across all 8 PCS lanes.</p>',
-      watch: 'Lock rings, the deskew buffer filling to absorb skew, and the crossover restoring lane order.' },
+      watch: 'Lock rings, the deskew buffer filling to absorb skew, and the crossover restoring lane order.',
+      lens: ['lock', 'deskew', 'reorder'] },
     { n: 9, side: 'RX', title: 'RX FEC, PCS decode, 200GMII and MAC', span: [84, 117],
       body: '<p>Receive mirrors transmit: <b>de-interleave</b> symbols into codewords A and B, <b>RS(544,514) decode</b> (up to 15 symbol errors per codeword corrected), <b>post-FEC interleave</b>, <b>AM removal</b>, <b>descramble</b>, <b>reverse transcode</b> to 66-bit blocks, and <b>64B/66B decode</b> onto 200GMII.</p><p>An uncorrectable codeword is not passed on silently. The PCS marks the affected blocks as errors, so the MAC sees damaged frames as FCS errors.</p>',
       watch: 'The decoder box flashes when it corrects or fails a codeword. Without align_status, nothing decodes and the MAC sees Local Fault.' }
@@ -2895,7 +2901,10 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
      rs     RS(544,514): 514 message symbols each, then 30 parity symbols appended
      dist   symbol distribution: codewords A and B dealt onto 8 PCS lanes
      mux    PMA bit-mux: PCS lane bits interleaved onto SerDes lanes
-     demux  RX PMA demux: a received SerDes lane dealt back onto RX PMA lanes */
+     demux  RX PMA demux: a received SerDes lane dealt back onto RX PMA lanes
+     lock   alignment lock on one RX PMA lane (Figure 119-12)
+     deskew markers lined up across the 8 lanes
+     reorder RX PMA lanes put back in PCS lane order */
 (function (P) {
   'use strict';
   var S = P.state, dlg, cv, ctx, dpr = 1, mode = null, cur = null;
@@ -3001,7 +3010,13 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     mux: 'The PMA interleaves the bits of the PCS lanes that share a SerDes lane, one bit from each in turn; on PAM4 lanes each pair of bits becomes one of four levels. ' +
       'Prev / Next walk the SerDes lanes; change SerDes lanes or the mapping in the toolbar to see 1, 2 or 4 PCS lanes per SerDes lane.',
     demux: 'On receive, the PMA demultiplexes each SerDes lane back into PCS lanes. It only sees a stream of bits, so the PCS lanes may come out in any order (120.5.2). ' +
-      'That is why every PCS lane carries its own alignment marker: the PCS reads them to put the lanes back in order.'
+      'That is why every PCS lane carries its own alignment marker: the PCS reads them to put the lanes back in order.',
+    lock: 'Before anything else the receiver must find the alignment markers in each lane’s bit stream. It tests 120-bit blocks against the common marker bytes, slipping a bit at a time; ' +
+      'once a marker is found, the next one, 4096 codewords later, must name the same PCS lane. Lock then holds until 5 markers in a row are bad. Markers are checked before FEC, so the match tolerates errors: 9 of 12 nibbles are enough.',
+    deskew: 'Each SerDes lane has its own path delay, so the markers of the 8 PCS lanes arrive at different times. Deskew holds the early lanes in a buffer until every marker has arrived, ' +
+      'then releases them together. Use the buttons or the fault lab’s skew slider; past 180 ns a lane cannot be aligned and align_status stays false.',
+    reorder: 'The demux and the board can deliver PCS lanes on any RX PMA lane. Each lane’s marker carries six unique bytes that name its PCS lane; the PCS reads them and puts the lanes back in order, ' +
+      'which FEC de-interleave needs because every codeword is spread across all 8 lanes.'
   };
 
   /* ---- drawing helpers ---- */
@@ -3841,6 +3856,271 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     label('lane colour = the end of each lane’s 120-bit alignment marker · amber = pad · grey = data', x0, yc + 32, th.muted, 10);
   }
   VIEWS.demux = MUX_RX;
+  MUX_RX.acts = function () {
+    return muxK() > 1 ? [{ label: 'Phase', title: 'Start the demux one bit later', run: function () { muxPhase = (muxRxPhase(mod(cur.s, S.link.width)).p + 1) % muxK(); } }] : [];
+  };
+  /* ---- Stage 8: alignment lock, deskew, lane reorder. Each reads the lab's link
+     and fault lab; the lab is paused while a view is open, so each view steps
+     through the mechanism on its own from the lab's current set-up. ---- */
+  var CM_B = [0, 1, 2, 4, 5, 6], UM_B = [8, 9, 10, 12, 13, 14];   // common / unique marker bytes
+  var LANE_BITS = 10 * 136;                                       // bits per PCS lane per pair
+  // Bit b of PCS lane p counted from the start of pair q; negative b reaches into the pair before.
+  function laneBitQ(q, p, b) {
+    var dq = Math.floor(b / LANE_BITS), lb = b - dq * LANE_BITS, k = Math.floor(lb / 10), id = P.laneSymbolId(p, k);
+    return +P.cwSymbol(q + dq, id.w, id.i).bits[lb % 10];
+  }
+  function rxLane(j) { var x = S.link.byRxPma[j]; return S.link.lanes[x]; }
+  // Toggle a fault-lab setting and keep the fault panel in step.
+  function setFault(fn, rebuild) { fn(S.faults); P.renderFaults(); if (rebuild) P.rebuild(true); else { P.refreshSkew(); P.emit('fault'); } }
+
+  /* Alignment lock (Figure 119-12) on one RX PMA lane: hunt, first marker, second
+     marker 4096 codewords later naming the same PCS lane, then checking each
+     marker; 5 bad in a row drop lock. With the lane's AMs corrupted in the fault
+     lab, markers go bad from the 4th so lock can be seen forming and dropping. */
+  var LK_MARKERS = 12, LK_LOSS = P.AM_LOSS_COUNT;
+  function lkBad(x) { return !P.amValid(x); }
+  // Nibble n (0-11) of the common or unique part of a candidate block at lane bit c of marker m.
+  function lkNibble(q, x, m, c, n, unique) {
+    var B = (unique ? UM_B : CM_B)[n >> 1], b0 = c + 8 * B + 4 * (n & 1), v = 0;
+    for (var i = 0; i < 4; i++) {
+      var bit = laneBitQ(q, x, b0 + i);
+      if (lkFlip(x, m, b0 + i)) bit ^= 1;
+      v |= bit << i;
+    }
+    return v;
+  }
+  // A corrupted marker: 4 of its 12 common nibbles inverted, so only 8 match.
+  function lkFlip(x, m, b) {
+    if (!lkBad(x) || m < 4 || b < 0 || b >= 120) return false;
+    var B = b >> 3, h = (b >> 2) & 1, n = CM_B.indexOf(B);
+    return n >= 0 && (2 * n + h) % 3 === 0;
+  }
+  function lkExpect(x, n, unique) { var B = (unique ? UM_B : CM_B)[n >> 1]; return (P.AM_TABLE[x][B] >> (4 * (n & 1))) & 15; }
+  function lkCommon(q, x, m, c) { var k = 0; for (var n = 0; n < 12; n++) if (lkNibble(q, x, m, c, n) === lkExpect(x, n)) k++; return k; }
+  // PCS lane named by the unique nibbles (9 or more of 12 match), or -1.
+  function lkWho(q, x, m, c) {
+    for (var y = 0; y < P.N_PCS; y++) {
+      var k = 0;
+      for (var n = 0; n < 12; n++) if (lkNibble(q, x, m, c, n, true) === lkExpect(y, n, true)) k++;
+      if (k >= 9) return y;
+    }
+    return -1;
+  }
+  // The sequence of events on RX PMA lane j, each with the state it leaves.
+  function lkEvents(j) {
+    var x = rxLane(j).pcs, q = cur.q, ev = [], slips = 3 + (j * 5) % 4, bad = 0, lock = false, map = -1;
+    for (var c = -slips; c < 0; c++) ev.push({ t: 'slip', m: 1, c: c, st: 'FIND_1ST → SLIP', lock: false, bad: 0, map: -1 });
+    ev.push({ t: 'first', m: 1, c: 0, st: 'FIND_1ST → COUNT_NEXT', lock: false, bad: 0, map: -1 });
+    lock = true; map = lkWho(q, x, 2, 0);
+    ev.push({ t: 'second', m: 2, c: 0, st: 'COMP_2ND → 2_GOOD', lock: true, bad: 0, map: map });
+    for (var m = 3; m <= LK_MARKERS; m++) {
+      if (!lock) { ev.push({ t: 'hunt', m: m, c: 0, st: 'FIND_1ST → SLIP', lock: false, bad: 0, map: -1 }); continue; }
+      if (lkCommon(q, x, m, 0) >= 9) { bad = 0; ev.push({ t: 'good', m: m, c: 0, st: 'COMP_AM → GOOD_AM', lock: true, bad: 0, map: map }); continue; }
+      bad++;
+      if (bad < LK_LOSS) { ev.push({ t: 'bad', m: m, c: 0, st: 'COMP_AM → INVALID_AM', lock: true, bad: bad, map: map }); continue; }
+      lock = false; map = -1;
+      ev.push({ t: 'lost', m: m, c: 0, st: 'INVALID_AM → LOCK_INIT', lock: false, bad: bad, map: -1 });
+    }
+    return ev;
+  }
+  VIEWS.lock = { title: 'Alignment lock', stage: 8, rate: 3, h: 250,
+    get steps() { return lkEvents(mod(cur.p, P.N_PCS)).length; },
+    at: function () { return { q: pairAt(P.X.amLock).q, p: 0 }; },
+    nav: function (c, d) { return { q: c.q, p: mod(c.p + d, P.N_PCS) }; },
+    where: function (c) { var j = mod(c.p, P.N_PCS); return 'RX PMA lane ' + j + ' of 8 · it carries PCS lane ' + rxLane(j).pcs + ', which the receiver learns only at lock'; },
+    acts: function () {
+      var x = rxLane(mod(cur.p, P.N_PCS)).pcs, on = S.faults.amLoss && S.faults.amLane === x;
+      return [{ label: on ? 'Stop corrupting AMs' : 'Corrupt this lane’s AMs', title: 'Fault lab: corrupt the alignment markers of PCS lane ' + x,
+        run: function () { setFault(function (F) { F.amLoss = !on; F.amLane = x; }); } }];
+    } };
+  function drawLock(W) {
+    var j = mod(cur.p, P.N_PCS), x = rxLane(j).pcs, q = cur.q, ev = lkEvents(j), k = stepping ? step : ev.length;
+    var e = k > 0 ? ev[k - 1] : { t: 'init', m: 1, c: -ev.filter(function (z) { return z.t === 'slip'; }).length, st: 'LOCK_INIT', lock: false, bad: 0, map: -1 };
+    var x0 = 70, nb = 144, b0 = -12, bw = (W - 16 - x0) / nb, ys = 62, lc = th.lanes[x];
+    function bx(b) { return x0 + (b - b0) * bw; }
+    label('RX PMA lane ' + j + ': the bits around marker ' + e.m + ', and the 120-bit block the receiver is testing', x0, 14, th.ink, 11, 'left', 600);
+    label('lane', 8, ys + 7, th.ink, 10, 'left', 600);
+    // The received bits: marker bits in the lane's colour, the rest grey; corrupted bits red.
+    for (var b = b0; b < b0 + nb; b++) {
+      var v = laneBitQ(q, x, b), flip = lkFlip(x, e.m, b), f = flip ? th.bad : b >= 0 && b < 120 ? lc : mix(th.edge, lc, 0.35);
+      box(bx(b) + 0.25, ys, bw - 0.5, 14, f);
+    }
+    for (var B = 0; B < 15; B++) {
+      var fx = bx(8 * B), name = P.AM_FIELDS[B];
+      ctx.strokeStyle = th.paper; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(fx, ys); ctx.lineTo(fx, ys + 14); ctx.stroke();
+      label(name, fx + 4 * bw, ys - 8, name[0] === 'C' ? th.ink : name[1] === 'M' ? lc : th.muted, 8, 'center', 600);
+    }
+    // The candidate block.
+    box(bx(e.c) - 1, ys - 3, 120 * bw + 2, 20, null, th.ink, 2);
+    // Nibble comparisons under the block: common part (is it a marker?) and unique part (which lane?).
+    var yn = ys + 24, cm = 0, valid = e.t !== 'slip' && e.t !== 'hunt' && e.t !== 'init';
+    for (var n = 0; n < 12; n++) {
+      var ok = lkNibble(q, x, e.m, e.c, n) === lkExpect(x, n);
+      if (ok) cm++;
+      var Bn = CM_B[n >> 1], nx = bx(e.c + 8 * Bn + 4 * (n & 1));
+      box(nx + 0.5, yn, 4 * bw - 1, 9, ok ? th.ink : th.bad);
+    }
+    var who = valid ? lkWho(q, x, e.m, e.c) : -1;
+    if (who >= 0) for (var u = 0; u < 12; u++) {
+      var Bu = UM_B[u >> 1]; box(bx(e.c + 8 * Bu + 4 * (u & 1)) + 0.5, yn, 4 * bw - 1, 9, th.lanes[who]);
+    }
+    label('nibbles', 8, yn + 5, th.muted, 9);
+    var yr = yn + 26;
+    label('common CM0–CM5: ' + cm + ' of 12 nibbles match (9 needed) → ' + (cm >= 9 ? 'a marker' : 'not a marker' + (e.t === 'hunt' || e.t === 'slip' || e.t === 'init' ? ', slip one bit' : '')),
+      x0, yr, cm >= 9 ? th.ink : th.bad, 10, 'left', 600);
+    if (who >= 0) label('unique UM0–UM5 match PCS lane ' + who, bx(64), yr, th.ink, 10, 'left', 600);
+    // One cell per marker, a marker period apart (4096 codewords in the standard).
+    var yt = yr + 26, cwm = (W - 16 - x0) / LK_MARKERS;
+    label('markers', 8, yt + 11, th.ink, 10, 'left', 600);
+    for (var m = 1; m <= LK_MARKERS; m++) {
+      var mx = x0 + (m - 1) * cwm, last = null;
+      for (var i = 0; i < k; i++) if (ev[i].m === m) last = ev[i];
+      var txt = '', fill = null;
+      if (last) {
+        var nsl = ev.slice(0, k).filter(function (z) { return z.m === m && z.t === 'slip'; }).length;
+        txt = { slip: 'slip ×' + nsl, first: '1st found', second: '2nd: lane ' + last.map, good: 'ok', bad: 'bad ' + last.bad, lost: 'bad 5: lost', hunt: 'hunting' }[last.t];
+        fill = last.t === 'bad' || last.t === 'lost' ? mix(th.bad, th.paper, 0.55) : last.t === 'hunt' || last.t === 'slip' ? mix(th.edge, th.paper, 0.6) : mix(lc, th.paper, 0.5);
+      }
+      box(mx + 1, yt, cwm - 2, 22, fill, fill ? null : th.rule);
+      if (txt) label(fit([txt, txt.split(':')[0]], cwm - 2, 9, 600), mx + cwm / 2, yt + 11, th.ink, 9, 'center', 600);
+      if (m === e.m && k > 0) box(mx, yt - 1, cwm, 24, null, th.ink, 2);
+    }
+    // The state machine's state and outputs after this step.
+    var yS = yt + 46;
+    label(e.st, x0, yS, th.ink, 13, 'left', 700);
+    var chips = ['amps_lock<' + j + '> = ' + e.lock, 'amp_bad_count = ' + e.bad, 'pcs_lane_mapping<' + j + '> = ' + (e.map >= 0 ? e.map : '—')];
+    ctx.font = font(10, 600); var cx = x0 + ctx.measureText(e.st).width * 1.3 + 24;
+    chips.forEach(function (s, i) {
+      ctx.font = font(10, 600); var tw = ctx.measureText(s).width + 14, f = i === 0 ? (e.lock ? lc : mix(th.edge, th.paper, 0.5)) : i === 1 && e.bad ? mix(th.bad, th.paper, 0.4) : mix(th.edge, th.paper, 0.75);
+      box(cx, yS - 10, tw, 20, f); label(s, cx + 7, yS, onFill(f), 10, 'left', 600); cx += tw + 8;
+    });
+    var yc = yS + 28;
+    label('lock: a marker found, then the next one, 4096 codewords later, names the same PCS lane · 5 bad markers in a row drop it (Figure 119–12)', x0, yc, th.ink, 10, 'left', 600);
+    label(lkBad(x) ? 'corrupted in the fault lab: from marker 4, 4 common nibbles are inverted (red), so only 8 of 12 match'
+      : 'hunting is shown at the marker; a real receiver slides through the data a bit at a time', x0, yc + 16, th.muted, 10);
+  }
+
+  /* Deskew (119.2.5.1, Figure 119-13): markers arrive at different times on the
+     RX PMA lanes; early lanes wait in a buffer until all line up. Up to 180 ns of
+     skew between PCS lanes is absorbed; a lane beyond that cannot be aligned. */
+  var DS_STEPS = 24;
+  VIEWS.deskew = { title: 'Deskew', stage: 8, steps: DS_STEPS, rate: 8, h: 330,
+    at: function () { return { q: pairAt((P.X.deskew[0] + P.X.deskew[1]) / 2).q }; },
+    where: function () {
+      var l = S.link;
+      return 'Skew between PCS lanes: ' + Math.round(l.spreadNs) + ' ns of a 180 ns budget' + (l.deskewOk ? '' : ' · over budget');
+    },
+    acts: function () {
+      var F = S.faults;
+      return [0, 120, 220].map(function (v) {
+        return { label: v ? '+' + v + ' ns on SerDes ' + F.skewLane : 'No extra skew', on: F.skewNs === v,
+          title: 'Fault lab: delay SerDes ' + F.skewLane + ' by ' + v + ' ns', run: function () { setFault(function (G) { G.skewNs = v; }); } };
+      });
+    } };
+  function drawDeskew(W) {
+    var link = S.link, k = stepping ? step : DS_STEPS, x0 = 150, xR = W - 156, y0 = 50, rh = 26;
+    var rows = [], target = 0;
+    for (var j = 0; j < P.N_PCS; j++) {
+      var l = rxLane(j), ok = P.amValid(l.pcs);
+      rows.push({ j: j, l: l, ok: ok });
+      if (ok && !l.deskewFail) target = Math.max(target, l.relSkewNs);
+    }
+    var T = Math.max(250, Math.ceil((link.spreadNs + 30) / 50) * 50), tc = k * (link.spreadNs + 20) / DS_STEPS;
+    function tx(t) { return x0 + t / T * (xR - x0); }
+    label('marker arrival on each RX PMA lane, in ns after the earliest lane; early lanes wait until every marker has arrived', x0 - 142, 14, th.ink, 11, 'left', 600);
+    // The 180 ns budget.
+    ctx.strokeStyle = th.bad; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(tx(P.DESKEW_CAP_NS), y0 - 12); ctx.lineTo(tx(P.DESKEW_CAP_NS), y0 + 8 * rh); ctx.stroke(); ctx.setLineDash([]);
+    label('180 ns budget', tx(P.DESKEW_CAP_NS), y0 - 18, th.bad, 9, 'center', 600);
+    var done = k >= DS_STEPS;
+    rows.forEach(function (r) {
+      var y = y0 + r.j * rh, l = r.l, lc = th.lanes[l.pcs], a = l.relSkewNs, mid = y + rh / 2;
+      label('RX PMA ' + r.j, 8, mid, th.ink, 10, 'left', 600);
+      box(72, mid - 5, 10, 10, lc); label('PCS ' + l.pcs, 88, mid, th.ink, 10, 'left', 600);
+      ctx.strokeStyle = th.rule; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x0, mid); ctx.lineTo(xR, mid); ctx.stroke();
+      if (!r.ok) { label('no lock: markers corrupted or lost', x0 + 6, mid, th.bad, 10, 'left', 600); return; }
+      if (tc < a) return;
+      if (l.deskewFail) {
+        box(tx(a) - 4, mid - 7, 8, 14, th.bad);
+        label(Math.round(a) + ' ns: over budget', xR + 6, mid, th.bad, 9, 'left', 600);
+        return;
+      }
+      var t1 = Math.min(tc, target);
+      if (t1 > a) box(tx(a), mid - 4, tx(t1) - tx(a), 8, mix(th.am, th.paper, 0.45));
+      box(tx(a) - 4, mid - 7, 8, 14, done ? mix(lc, th.paper, 0.55) : lc);
+      if (done) box(tx(target) - 4, mid - 7, 8, 14, lc);
+      var wait = target - a;
+      label(done ? (wait > 0.5 ? 'waits ' + Math.round(wait) + ' ns, ' + num(Math.round(wait * 26.5625)) + ' bits' : 'latest: no wait') : Math.round(a) + ' ns',
+        done ? xR + 6 : tx(a) + 8, done ? mid : mid - 10, done ? th.ink : th.muted, 9, 'left', done ? 600 : 500);
+    });
+    if (done) {
+      ctx.strokeStyle = th.ink; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(tx(target), y0 - 4); ctx.lineTo(tx(target), y0 + 8 * rh + 4); ctx.stroke();
+    } else if (stepping) {
+      ctx.strokeStyle = th.muted; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(tx(tc), y0 - 4); ctx.lineTo(tx(tc), y0 + 8 * rh + 4); ctx.stroke();
+    }
+    // Time axis.
+    var ya = y0 + 8 * rh + 10;
+    ctx.strokeStyle = th.muted; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x0, ya); ctx.lineTo(xR, ya); ctx.stroke();
+    for (var t = 0; t <= T; t += 50) { ctx.beginPath(); ctx.moveTo(tx(t), ya); ctx.lineTo(tx(t), ya + 4); ctx.stroke(); label(t + ' ns', tx(t), ya + 13, th.muted, 9, 'center'); }
+    var locked = rows.every(function (r) { return r.ok; }), aligned = locked && link.deskewOk, yc = ya + 34;
+    label(done ? (aligned ? 'every marker lined up: deskew done, align_status = true' : 'align_status = false: ' + (locked ? 'a lane is more than 180 ns late' : 'not every lane is locked'))
+      : 'time ' + Math.round(tc) + ' ns: lanes whose marker has arrived wait (amber) for the rest' + (link.deskewOk ? '' : '; red = later than the 180 ns budget'),
+      x0 - 142, yc, done && !aligned ? th.bad : th.ink, 10, 'left', 600);
+    label('the PCS must absorb up to 180 ns of skew and 4 ns of skew variation between PCS lanes (119.2.5.1) · lanes on one SerDes lane share its skew', x0 - 142, yc + 16, th.muted, 10);
+  }
+
+  /* Lane reorder (119.2.5.2): each RX PMA lane's unique marker bytes name its
+     PCS lane, and the lanes are put back in order 0-7 for FEC de-interleave. */
+  VIEWS.reorder = { title: 'Lane reorder', stage: 8, steps: P.N_PCS, rate: 3, h: 336,
+    at: function () { return { q: pairAt((P.X.reorder[0] + P.X.reorder[1]) / 2).q }; },
+    where: function () {
+      var o = S.link.byRxPma, same = o.every(function (x, j) { return x === j; });
+      return 'RX PMA lanes carry PCS lanes ' + o.join(', ') + (same ? ' · already in order' : '');
+    },
+    acts: function () {
+      return [{ label: 'Re-lock (new demux phase)', title: 'Fault lab: re-lock the link; each demux may start on a different bit', run: function () { P.rebuild(true); } },
+        { label: S.faults.swap ? 'Unswap SerDes 0 and 1' : 'Swap SerDes 0 and 1', title: 'Fault lab: board lane swap',
+          run: function () { setFault(function (F) { F.swap = !F.swap; }, true); } }];
+    } };
+  function drawReorder(W) {
+    var link = S.link, k = stepping ? step : P.N_PCS, h = hot(), x0 = 90, tw = 36, y0 = 50, rh = 28, xr = W - 120;
+    var xe = x0 + 6 * tw + 92;
+    label('in: RX PMA lanes, as the demux produced them', 8, 14, th.ink, 11, 'left', 600);
+    label('out: PCS lanes 0–7', xr - 10, 14, th.ink, 11, 'left', 600);
+    UM_B.forEach(function (B, i) { label(P.AM_FIELDS[B], x0 + i * tw + tw / 2, y0 - 10, th.muted, 9, 'center'); });
+    var placed = [];
+    for (var j = 0; j < P.N_PCS; j++) {
+      var l = rxLane(j), x = l.pcs, ok = P.amValid(x), y = y0 + j * rh, mid = y + rh / 2 - 2, on = j < k, lc = th.lanes[x];
+      label('RX PMA ' + j, 8, mid, th.ink, 10, 'left', 600);
+      for (var i = 0; i < 6; i++) {
+        var f = on && ok ? lc : mix(th.edge, th.paper, 0.55);
+        box(x0 + i * tw + 1, mid - 10, tw - 2, 20, f);
+        label(on ? (ok ? P.hex(P.AM_TABLE[x][UM_B[i]], 2) : '??') : '', x0 + i * tw + tw / 2, mid, onFill(f), 10, 'center', 600);
+      }
+      if (on) label(ok ? '→ PCS ' + x : 'no lock', x0 + 6 * tw + 10, mid, ok ? th.ink : th.bad, 10, 'left', 700);
+      if (on && ok) {
+        placed[x] = j;
+        var yo = y0 + x * rh + rh / 2 - 2;
+        ctx.strokeStyle = lc; ctx.lineWidth = j === h ? 3 : 2;
+        ctx.beginPath(); ctx.moveTo(xe, mid); ctx.bezierCurveTo((xe + xr) / 2, mid, (xe + xr) / 2, yo, xr - 4, yo); ctx.stroke();
+      }
+      if (j === h) box(x0 - 2, mid - 12, 6 * tw + 4, 24, null, th.ink, 2);
+    }
+    for (var p = 0; p < P.N_PCS; p++) {
+      var yp = y0 + p * rh + rh / 2 - 2, got = placed[p] !== undefined;
+      box(xr, yp - 10, 70, 20, got ? th.lanes[p] : null, got ? null : th.rule);
+      label('PCS ' + p, xr + 35, yp, got ? onFill(th.lanes[p]) : th.muted, 10, 'center', 600);
+      if (got) label('from ' + placed[p], xr + 76, yp, th.muted, 9);
+    }
+    var yc = y0 + 8 * rh + 18;
+    label('the unique bytes UM0–UM5 of each lane’s marker name its PCS lane (9 of 12 nibbles must match); the PCS reorders by that number (119.2.5.2)', 8, yc, th.ink, 10, 'left', 600);
+    label('then codewords A and B are de-interleaved: lane symbol k of PCS lane p is symbol 4k + ⌊p/2⌋ of A or B, so every lane must be in its place', 8, yc + 16, th.muted, 10);
+    label('the order changes with the demux phase (RX PMA demux view) and with a board lane swap', 8, yc + 32, th.muted, 10);
+  }
+
+
   function muxHeight(rx) {
     var kk = muxK();
     return rx ? 184 + 22 * kk : 86 + 22 * kk + (P.WIDTHS[S.width].mod === 'PAM4' ? 152 : 76);
@@ -3850,7 +4130,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     prefec: function (W) { (page ? drawPrefec : drawPrefecConcept)(W); },
     rs: drawRs,
     dist: function (W) { (page ? drawDist : drawDistConcept)(W); },
-    mux: drawMux, demux: drawDemux };
+    mux: drawMux, demux: drawDemux, lock: drawLock, deskew: drawDeskew, reorder: drawReorder };
   // Views with two pages: the view in force on each, and the page names.
   var PAGES = {
     prefec: { v: function () { return page ? VIEWS.prefec : PF_CONCEPT; }, names: ['Overview', 'Distribution details'] },
@@ -3893,6 +4173,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
   }
 
   function $(id) { return document.getElementById(id); }
+  var actsKey = null;
   function sync() {
     var v = view(), N = v.steps;
     if (PAGES[mode]) $('opv-title').textContent = v.title;
@@ -3900,8 +4181,12 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     $('opv-prev').hidden = $('opv-next').hidden = !v.nav;
     // Nothing to step through (8 × NRZ bit-mux): the view is shown complete.
     $('opv-step').hidden = $('opv-play').hidden = $('opv-count').hidden = !N;
-    var ph = $('opv-phase');
-    if (ph) ph.hidden = !(mode === 'demux' && muxK() > 1);
+    // Buttons a view adds to the footer; re-rendered only when they change.
+    var acts = v.acts ? v.acts() : [], ah = acts.map(function (a, i) {
+      return '<button type="button" class="btn" data-act="x" data-x="' + i + '" title="' + esc(a.title) + '"' +
+        (a.on === undefined ? '' : ' aria-pressed="' + a.on + '"') + '>' + esc(a.label) + '</button>';
+    }).join('');
+    if (ah !== actsKey) { actsKey = ah; $('opv-acts').innerHTML = ah; }
     $('opv-play').textContent = anim ? 'Pause' : step < N ? 'Play' : 'Animate';
     $('opv-count').textContent = stepping ? Math.min(step, N) + ' / ' + N : '';
     cv.setAttribute('aria-label', v.title + '. ' + v.where(cur) + '.');
@@ -4058,7 +4343,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       else if (a === 'pk-prev' || a === 'pk-next') { pickNav(a === 'pk-next' ? 1 : -1); var f = dlg.querySelector('[data-act="' + a + '"]'); if (f) f.focus(); }
       else if (a === 'pk-clear') { pick = -1; sync(); }
       else if (a === 'page') flipPage();
-      else if (a === 'phase') { muxPhase = (muxRxPhase(mod(cur.s, S.link.width)).p + 1) % muxK(); step = view().steps; anim = stepping = false; sync(); }
+      else if (a === 'x') { var A = (view().acts ? view().acts() : [])[+b.dataset.x]; if (A) { A.run(); step = view().steps; anim = stepping = false; sync(); } }
     });
     // AM view: click a slot tile to see what AM insertion did to it.
     function canvasPoint(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
@@ -4083,7 +4368,13 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
     // The close event is queued; a view reopened in the meantime must survive it.
     dlg.addEventListener('close', function () { if (!dlg.open) { mode = null; cur = null; anim = stepping = false; } });
     new ResizeObserver(function () { if (mode) size(); }).observe($('opv-wrap'));
-    P.on(function (what) { if (mode && (what === 'link' || what === 'payload')) { if (what === 'link') muxPhase = null; if (mode === 'mux' || mode === 'demux') { step = view().steps; size(); } sync(); } });
+    P.on(function (what) {
+      if (!mode || (what !== 'link' && what !== 'payload' && what !== 'fault')) return;
+      if (what === 'link') muxPhase = null;
+      // Views that read the link or fault lab start over, complete, on the new set-up.
+      if (/^(mux|demux|lock|deskew|reorder)$/.test(mode)) { step = view().steps; anim = stepping = false; size(); }
+      sync();
+    });
   };
 })(globalThis.PCS = globalThis.PCS || {});
 
@@ -4404,7 +4695,7 @@ svg.fig .amk { stroke: var(--ink); stroke-width: 1; }
       '<fieldset class="fault"><legend>Alignment marker loss</legend>' +
         '<div class="frow"><label class="check"><input type="checkbox" id="f-am"' + (F.amLoss ? ' checked' : '') + '> Corrupt AMs on</label>' +
         '<select id="f-am-lane" aria-label="PCS lane with corrupted AMs">' + opts(8, F.amLane, 'PCS') + '</select></div>' +
-        '<p class="fhelp">After ' + P.AM_LOSS_COUNT + ' bad AMs in a row (illustrative count) that lane drops lock, and align_status with it.</p>' +
+        '<p class="fhelp">After ' + P.AM_LOSS_COUNT + ' bad AMs in a row (Figure 119–12) that lane drops lock, and align_status with it.</p>' +
       '</fieldset>' +
       '<fieldset class="fault"><legend>Loss of signal</legend>' +
         '<div class="frow"><label class="check"><input type="checkbox" id="f-los"' + (F.los ? ' checked' : '') + '> Kill</label>' +

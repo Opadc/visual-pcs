@@ -110,6 +110,8 @@ input[type="text"]:focus-visible { outline: 2px solid var(--focus); outline-offs
 .opv-note { max-width: 88ch; }
 .opv-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--rule-2); padding-top: 8px; }
 .opv-foot .btn { min-height: 32px; padding: 2px 11px; font-size: 0.82rem; }
+.opv-acts { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.opv-acts .btn[aria-pressed="true"] { border-color: var(--ink); font-weight: 600; }
 .opv-sp { flex: 1; }
 .opv-count { font-family: var(--f-mono); font-size: 0.72rem; color: var(--muted); min-width: 4.5em; text-align: right; }
 .sd-lens { font-size: 0.9rem; }

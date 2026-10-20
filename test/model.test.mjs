@@ -56,11 +56,14 @@ test('warp and unwarp are inverses and deskew re-aligns lanes', () => {
   for (const t of totals) assert.ok(Math.abs(t - totals[0]) < 1e-9);
 });
 
-test('AM lock drops after repeated bad AMs and re-acquires', () => {
+test('AM lock drops after 5 bad AMs in a row (Figure 119-12) and re-acquires', () => {
+  assert.equal(P.AM_LOSS_COUNT, 5);
   const L = { state: 'locked', good: 0, bad: 0 };
-  P.amLockStep(L, false); P.amLockStep(L, false);
+  for (let i = 0; i < 4; i++) P.amLockStep(L, false);
   assert.equal(P.lockView(L), 'checking');
-  P.amLockStep(L, false);
+  P.amLockStep(L, true);
+  assert.equal(L.bad, 0, 'a good AM resets amp_bad_count');
+  for (let i = 0; i < 5; i++) P.amLockStep(L, false);
   assert.equal(L.state, 'searching');
   assert.equal(P.lockView(L), 'nolock');
   P.amLockStep(L, true); P.amLockStep(L, true);

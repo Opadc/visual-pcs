@@ -22,7 +22,7 @@
       '<fieldset class="fault"><legend>Alignment marker loss</legend>' +
         '<div class="frow"><label class="check"><input type="checkbox" id="f-am"' + (F.amLoss ? ' checked' : '') + '> Corrupt AMs on</label>' +
         '<select id="f-am-lane" aria-label="PCS lane with corrupted AMs">' + opts(8, F.amLane, 'PCS') + '</select></div>' +
-        '<p class="fhelp">After ' + P.AM_LOSS_COUNT + ' bad AMs in a row (illustrative count) that lane drops lock, and align_status with it.</p>' +
+        '<p class="fhelp">After ' + P.AM_LOSS_COUNT + ' bad AMs in a row (Figure 119–12) that lane drops lock, and align_status with it.</p>' +
       '</fieldset>' +
       '<fieldset class="fault"><legend>Loss of signal</legend>' +
         '<div class="frow"><label class="check"><input type="checkbox" id="f-los"' + (F.los ? ' checked' : '') + '> Kill</label>' +

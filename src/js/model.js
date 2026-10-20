@@ -6,8 +6,8 @@
 
   P.N_PCS = 8;                 // 200GBASE-R PCS lanes
   P.DESKEW_CAP_NS = 180;       // skew budget at the PCS receive input (IEEE 802.3 Table 116-7)
-  P.AM_LOSS_COUNT = 3;         // conceptual: consecutive bad AMs before lock is dropped
-  P.AM_ACQUIRE_COUNT = 2;      // conceptual: matching AMs at the right spacing to lock
+  P.AM_LOSS_COUNT = 5;         // consecutive bad AMs before lock is dropped (amp_bad_count = 5, Figure 119-12)
+  P.AM_ACQUIRE_COUNT = 2;      // a marker, then the next naming the same PCS lane (FIND_1ST, COMP_2ND)
   // Scene lane cubes are 4 PCS-lane symbols (40 bits); a codeword pair is 136
   // symbols per lane, so 34 cubes. The first 3 cubes (12 symbols, 120 bits) of
   // an AM pair are that lane's alignment marker. The scene inserts an AM group

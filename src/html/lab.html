@@ -81,6 +81,9 @@
         <button type="button" class="btn" data-view="dist">Symbol distribution</button>
         <button type="button" class="btn" data-view="mux">Bit-mux</button>
         <button type="button" class="btn" data-view="demux">RX demux</button>
+        <button type="button" class="btn" data-view="lock">AM lock</button>
+        <button type="button" class="btn" data-view="deskew">Deskew</button>
+        <button type="button" class="btn" data-view="reorder">Lane reorder</button>
       </div>
       <span class="lens-hint">Input on the left, output on the right. Or click a box in the 3D view.</span>
     </div>
@@ -104,7 +107,7 @@
         <button type="button" class="btn" data-act="next" id="opv-next" title="The unit after this one (→)">Next →</button>
         <span class="opv-sp"></span>
         <span class="opv-count" id="opv-count" aria-live="polite"></span>
-        <button type="button" class="btn" data-act="phase" id="opv-phase" title="Start the demux one bit later" hidden>Phase</button>
+        <span class="opv-acts" id="opv-acts"></span>
         <button type="button" class="btn" data-act="step" id="opv-step" title="Add one unit (.)">Step</button>
         <button type="button" class="btn primary" data-act="play" id="opv-play" title="Replay one unit at a time (P)">Animate</button>
       </footer>
